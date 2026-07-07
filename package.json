@@ -1,0 +1,73 @@
+{
+  "name": "@arki/http",
+  "version": "0.0.1",
+  "description": "Typed HTTP for ARKI — route contracts as data, zod-validated handlers, request-scope derivers, SSE streaming, OpenAPI generation, and the DOT http() pip.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arki-labs/arki.git"
+  },
+  "homepage": "https://arki.dev",
+  "bugs": {
+    "url": "https://github.com/arki-labs/arki/issues"
+  },
+  "keywords": [
+    "arki",
+    "typescript",
+    "http",
+    "hono",
+    "sse",
+    "streaming",
+    "openapi",
+    "dot"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dot": {
+      "types": "./dist/dot.d.ts",
+      "import": "./dist/dot.js",
+      "default": "./dist/dot.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "import": "./dist/context.js",
+      "default": "./dist/context.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**",
+    "src/**",
+    "!src/**/*.test.*",
+    "!src/**/*.spec.*",
+    "!src/**/tests/**",
+    "!src/**/test/**",
+    "!src/**/__tests__/**",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "dependencies": {
+    "@arki/log": "0.0.2",
+    "@hono/node-server": "^2.0.8",
+    "hono": "^4.12.25",
+    "zod": "4.3.5"
+  },
+  "peerDependencies": {
+    "@arki/dot": "^0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@arki/dot": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
