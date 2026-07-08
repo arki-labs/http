@@ -1,19 +1,17 @@
 /**
  * Route bundles — the dynamic half of an HTTP surface.
  *
- * A bundle binds contracts to handlers. It is assembled inside a pip's
- * `boot` hook — where the pip's `needs` are already injected — so handlers
+ * A bundle binds contracts to handlers. It is assembled inside a plugin's
+ * `boot` hook — where the plugin's `needs` are already injected — so handlers
  * and derivers close over typed singletons:
  *
  * ```ts
  * export const OrdersRoutes = token<RouteBundle>()('orders.routes');
  *
- * export const ordersPip = pip({
+ * export const ordersPlugin = plugin({
  *   name: 'orders',
  *   needs: { db: service<Db>() },
- *   configure(ctx) {
- *     registerRoutes(ctx, [listOrders, createOrder]); // from '@arki/http/dot'
- *   },
+ *   actions: [listOrders, createOrder],
  *   async boot({ db }) {
  *     return provide(
  *       OrdersRoutes,
@@ -31,6 +29,39 @@
  */
 import { BASE_CTX_KEYS } from './derive.js';
 import { HTTP_ERROR_CODES, HttpConfigError } from './error.js';
+import { HTTP_ACTION_META_SCHEMA } from './openapi.js';
+/** Declare the static half of an RPC mount. See {@link RpcMountContract}. */
+export function rpcMount(path, options) {
+    assertMountPath(path, options.id);
+    const transport = options.transport ?? 'orpc';
+    return {
+        kind: 'rpc-mount',
+        id: options.id,
+        path,
+        transport,
+        ...(options.summary === undefined ? {} : { summary: options.summary }),
+        toDotAction() {
+            return {
+                id: options.id,
+                binding: transport,
+                direction: 'in',
+                address: path,
+                ...(options.summary === undefined ? {} : { summary: options.summary }),
+                metaSchema: HTTP_ACTION_META_SCHEMA,
+                meta: { path, rpc: true },
+            };
+        },
+    };
+}
+function assertMountPath(path, id) {
+    if (!path.startsWith('/') || path.includes(' ')) {
+        throw new HttpConfigError({
+            code: HTTP_ERROR_CODES.invalidMount,
+            message: `[http] mount path "${path}" for "${id}" is invalid — it must start with "/" and contain no spaces.`,
+            remediation: 'Mount under an absolute path prefix, e.g. "/rpc".',
+        });
+    }
+}
 function assertFreshDeriverKey(key, existing) {
     const reserved = BASE_CTX_KEYS.includes(key);
     const duplicate = existing.some(d => d.key === key);
@@ -49,6 +80,7 @@ function makeBuilder(state) {
         derivers: state.derivers,
         bindings: state.bindings,
         mounts: state.mounts,
+        rpcs: state.rpcs,
         derive(keyOrDeriver, fn) {
             let deriver;
             if (typeof keyOrDeriver === 'string') {
@@ -71,16 +103,25 @@ function makeBuilder(state) {
             return makeBuilder({ ...state, bindings: [...state.bindings, { contract, handler }] });
         },
         mount(path, handler, meta) {
-            if (!path.startsWith('/') || path.includes(' ')) {
-                throw new HttpConfigError({
-                    code: HTTP_ERROR_CODES.invalidMount,
-                    message: `[http] mount path "${path}" is invalid — it must start with "/" and contain no spaces.`,
-                    remediation: 'Mount under an absolute path prefix, e.g. mount("/rpc", handler, { id: "rpc" }).',
-                });
-            }
+            assertMountPath(path, meta.id);
             return makeBuilder({
                 ...state,
                 mounts: [...state.mounts, { id: meta.id, path, transport: meta.transport ?? 'custom', handler }],
+            });
+        },
+        rpc(contract, handlers) {
+            return makeBuilder({
+                ...state,
+                rpcs: [
+                    ...state.rpcs,
+                    {
+                        id: contract.id,
+                        path: contract.path,
+                        transport: contract.transport,
+                        context: handlers.context,
+                        handle: handlers.handle,
+                    },
+                ],
             });
         },
     };
@@ -93,6 +134,17 @@ function makeBuilder(state) {
 }
 /** Start an empty bundle. See the module docs for the authoring pattern. */
 export function routes() {
-    return makeBuilder({ derivers: [], bindings: [], mounts: [] });
+    return makeBuilder({ derivers: [], bindings: [], mounts: [], rpcs: [] });
+}
+/**
+ * Declare a feature's HTTP surface as a boot-time slice
+ * (`defineFeature(..., { use: [endpoints(build)] })`). The builder runs
+ * once at boot with the feature's needed services; the bundle lands
+ * under `routes` in the feature's slice token — where
+ * `http({ features })` collects it. Route contracts stay in the
+ * feature's `actions` list.
+ */
+export function endpoints(build) {
+    return { key: 'routes', actions: [], resolve: build };
 }
 //# sourceMappingURL=bundle.js.map

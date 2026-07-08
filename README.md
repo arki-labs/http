@@ -47,16 +47,13 @@ coded envelope: `{ "error": { "code", "message", "remediation?", "docsUrl?" } }`
 ```ts
 import { pip, provide, service, token } from '@arki/dot/pip';
 import { routes, type RouteBundle } from '@arki/http';
-import { registerRoutes } from '@arki/http/dot';
 
 export const OrdersRoutes = token<RouteBundle>()('orders.routes');
 
 export const ordersPip = pip({
   name: 'orders',
   needs: { db: service<Db>() },
-  configure(ctx) {
-    registerRoutes(ctx, [listOrders, createOrder]); // manifest + OpenAPI metadata
-  },
+  actions: [listOrders, createOrder], // manifest + OpenAPI metadata
   async boot({ db }) {
     return provide(
       OrdersRoutes,
@@ -185,8 +182,8 @@ const document = toOpenApi([listOrders, createOrder, progress], {
 ```
 
 Deterministic — same contracts, byte-identical output. Inside a DOT app,
-`registerRoutes` puts the JSON Schemas into the manifest, so
-`dot explain --openapi` renders the document from the static manifest
+contract actions put the JSON Schemas into the manifest, so
+`dot explain --as openapi` renders the document from the static manifest
 without booting anything.
 
 ## Without DOT

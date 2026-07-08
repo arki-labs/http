@@ -10,12 +10,17 @@
  *  - the handler signature is fully inferred when the contract is bound
  *    (see `routes().bind()` in `bundle.ts`).
  */
-const makeRoute = (method) => (path, def) => ({
-    kind: 'http',
-    method,
-    path,
-    ...def,
-});
+import { contractMeta } from './openapi.js';
+const makeRoute = (method) => (path, def) => {
+    const contract = {
+        kind: 'http',
+        method,
+        path,
+        ...def,
+        toDotAction: () => contractMeta(contract),
+    };
+    return contract;
+};
 /**
  * Contract factories, one per method, plus {@link route.sse} for typed
  * event streams.
@@ -39,11 +44,15 @@ export const route = {
     put: makeRoute('PUT'),
     patch: makeRoute('PATCH'),
     delete: makeRoute('DELETE'),
-    sse: (path, def) => ({
-        kind: 'sse',
-        method: 'GET',
-        path,
-        ...def,
-    }),
+    sse: (path, def) => {
+        const contract = {
+            kind: 'sse',
+            method: 'GET',
+            path,
+            ...def,
+            toDotAction: () => contractMeta(contract),
+        };
+        return contract;
+    },
 };
 //# sourceMappingURL=contract.js.map

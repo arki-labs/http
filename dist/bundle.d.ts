@@ -1,19 +1,17 @@
 /**
  * Route bundles — the dynamic half of an HTTP surface.
  *
- * A bundle binds contracts to handlers. It is assembled inside a pip's
- * `boot` hook — where the pip's `needs` are already injected — so handlers
+ * A bundle binds contracts to handlers. It is assembled inside a plugin's
+ * `boot` hook — where the plugin's `needs` are already injected — so handlers
  * and derivers close over typed singletons:
  *
  * ```ts
  * export const OrdersRoutes = token<RouteBundle>()('orders.routes');
  *
- * export const ordersPip = pip({
+ * export const ordersPlugin = plugin({
  *   name: 'orders',
  *   needs: { db: service<Db>() },
- *   configure(ctx) {
- *     registerRoutes(ctx, [listOrders, createOrder]); // from '@arki/http/dot'
- *   },
+ *   actions: [listOrders, createOrder],
  *   async boot({ db }) {
  *     return provide(
  *       OrdersRoutes,
@@ -31,6 +29,7 @@
  */
 import type { ContractLike, ParamsOf, RouteContract, SseContract } from './contract.js';
 import type { BaseRequestCtx, Deriver, ErasedDeriver } from './derive.js';
+import { HTTP_ACTION_META_SCHEMA } from './openapi.js';
 type MaybePromise<T> = T | Promise<T>;
 /** The validated inputs a bound handler receives. */
 export type RouteInput<TPath extends string, TQuery, TBody> = {
@@ -81,15 +80,71 @@ export type MountBinding = {
     readonly transport: MountTransport;
     readonly handler: (req: Request) => Response | Promise<Response>;
 };
+/** Manifest declaration an {@link RpcMountDef} produces via `toDotAction()`. */
+export type RpcActionMeta = {
+    readonly id: string;
+    readonly binding: MountTransport;
+    readonly direction: 'in';
+    readonly address: string;
+    readonly summary?: string;
+    readonly metaSchema: typeof HTTP_ACTION_META_SCHEMA;
+    readonly meta: {
+        readonly path: string;
+        readonly rpc: true;
+    };
+};
+/**
+ * The STATIC half of an RPC mount — pure data plus `toDotAction()`, so a
+ * feature plugin lists it in `actions:` at module level (declare-once), and
+ * binds `context`/`handle` in `boot` where its services exist
+ * (bind-once) — the exact contract/handler split `route.get(...)` uses.
+ */
+export type RpcMountContract = {
+    readonly kind: 'rpc-mount';
+    /** Stable manifest id, e.g. 'orders.rpc'. */
+    readonly id: string;
+    /** Path prefix the RPC handler owns, e.g. '/rpc/orders'. */
+    readonly path: string;
+    readonly transport: MountTransport;
+    readonly summary?: string;
+    toDotAction(): RpcActionMeta;
+};
+export type RpcMountOptions = {
+    readonly id: string;
+    /** Manifest binding name. Defaults to `'orpc'`. */
+    readonly transport?: MountTransport;
+    readonly summary?: string;
+};
+/**
+ * The boot-time half: a per-request context factory (receives the
+ * bundle's accumulated derived ctx, typed) and the dispatch — typically
+ * an oRPC `RPCHandler` or tRPC fetch adapter built once at boot.
+ */
+export type RpcMountHandlers<TDerived extends BaseRequestCtx, TRpcCtx> = {
+    readonly context: (req: Request, ctx: TDerived) => TRpcCtx | Promise<TRpcCtx>;
+    readonly handle: (req: Request, ctx: NoInfer<TRpcCtx>) => Response | Promise<Response>;
+};
+/** Erased rpc binding a bundle stores — same seam as {@link RouteBinding}. */
+export type RpcBinding = {
+    readonly id: string;
+    readonly path: string;
+    readonly transport: MountTransport;
+    readonly context: (req: Request, ctx: never) => unknown;
+    readonly handle: (req: Request, ctx: never) => Response | Promise<Response>;
+};
+/** Declare the static half of an RPC mount. See {@link RpcMountContract}. */
+export declare function rpcMount(path: string, options: RpcMountOptions): RpcMountContract;
 /**
  * A plain value: derivers + bound contracts + mounts. Published as an
- * ordinary DOT service under a token and collected by the `http()` pip —
+ * ordinary DOT service under a token and collected by the `http()` plugin —
  * no new kernel concept.
  */
 export type RouteBundle = {
     readonly derivers: readonly ErasedDeriver[];
     readonly bindings: readonly RouteBinding[];
     readonly mounts: readonly MountBinding[];
+    /** Typed RPC mounts — optional so hand-rolled bundles stay valid. */
+    readonly rpcs?: readonly RpcBinding[];
 };
 /**
  * Immutable bundle builder. Every method returns a new builder; deriver
@@ -114,8 +169,30 @@ export type RouteBundleBuilder<TCtx extends BaseRequestCtx = BaseRequestCtx> = R
      * schemas, derivers do NOT run for mounted handlers.
      */
     mount(path: string, handler: (req: Request) => Response | Promise<Response>, meta: MountMeta): RouteBundleBuilder<TCtx>;
+    /**
+     * Bind a static {@link RpcMountContract} to its boot-time handlers.
+     * Unlike `mount`, the bundle's derivers RUN before dispatch, and the
+     * context factory receives the accumulated derived ctx — derivers
+     * added before `.rpc()` are typed into it.
+     */
+    rpc<TRpcCtx>(contract: RpcMountContract, handlers: RpcMountHandlers<TCtx, TRpcCtx>): RouteBundleBuilder<TCtx>;
 };
 /** Start an empty bundle. See the module docs for the authoring pattern. */
 export declare function routes(): RouteBundleBuilder;
+/** The `@arki/feature` slice contract an `endpoints(...)` declaration produces. */
+export type EndpointsFeatureSlice<TServices> = {
+    readonly key: 'routes';
+    readonly actions: readonly never[];
+    readonly resolve: (services: TServices) => RouteBundle;
+};
+/**
+ * Declare a feature's HTTP surface as a boot-time slice
+ * (`defineFeature(..., { use: [endpoints(build)] })`). The builder runs
+ * once at boot with the feature's needed services; the bundle lands
+ * under `routes` in the feature's slice token — where
+ * `http({ features })` collects it. Route contracts stay in the
+ * feature's `actions` list.
+ */
+export declare function endpoints<TServices>(build: (services: TServices) => RouteBundle): EndpointsFeatureSlice<TServices>;
 export {};
 //# sourceMappingURL=bundle.d.ts.map

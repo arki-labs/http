@@ -15,7 +15,7 @@
  * });
  * ```
  *
- * Because bundles are assembled inside a pip's `boot`, derivers close over
+ * Because bundles are assembled inside a plugin's `boot`, derivers close over
  * injected singletons — request scope is function application over the
  * compile-time-wired service graph, not per-request container resolution.
  */

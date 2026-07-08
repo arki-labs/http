@@ -1,7 +1,7 @@
 {
   "name": "@arki/http",
-  "version": "0.0.1",
-  "description": "Typed HTTP for ARKI — route contracts as data, zod-validated handlers, request-scope derivers, SSE streaming, OpenAPI generation, and the DOT http() pip.",
+  "version": "0.0.2",
+  "description": "Typed HTTP for ARKI — route contracts as data, zod-validated handlers, request-scope derivers, SSE streaming, OpenAPI generation, and the DOT http() plugin.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -34,6 +34,11 @@
       "import": "./dist/dot.js",
       "default": "./dist/dot.js"
     },
+    "./projection": {
+      "types": "./dist/projection.d.ts",
+      "import": "./dist/projection.js",
+      "default": "./dist/projection.js"
+    },
     "./context": {
       "types": "./dist/context.d.ts",
       "import": "./dist/context.js",
@@ -55,12 +60,13 @@
   ],
   "dependencies": {
     "@arki/log": "0.0.2",
+    "@arki/ts": "0.0.3",
     "@hono/node-server": "^2.0.8",
     "hono": "^4.12.25",
     "zod": "4.3.5"
   },
   "peerDependencies": {
-    "@arki/dot": "^0.3.0"
+    "@arki/dot": "^0.4.0"
   },
   "peerDependenciesMeta": {
     "@arki/dot": {

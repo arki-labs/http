@@ -13,33 +13,53 @@ export type OpenApiInfo = {
     readonly version: string;
     readonly description?: string;
 };
-type JsonObject = Record<string, unknown>;
+export type JsonValue = string | number | boolean | null | JsonValue[] | {
+    [key: string]: JsonValue;
+};
+export type JsonObject = {
+    [key: string]: JsonValue;
+};
+export declare const HTTP_ACTION_META_SCHEMA = "@arki/http/action-meta@1";
 /**
  * Render an OpenAPI 3.1 document from contracts. Paths and operations
  * appear in contract order; duplicate method+path pairs fail loudly with
  * `ARKI_HTTP_E002` (the same collision `buildEngine` rejects at boot).
  */
 export declare function toOpenApi(contracts: readonly ContractLike[], info: OpenApiInfo): JsonObject;
-/** The DOT `registerRoute` argument derived from a contract. */
+type DotActionLike = {
+    readonly id: string;
+    readonly plugin: string;
+    readonly binding: string;
+    readonly direction: 'in' | 'out';
+    readonly address?: string;
+    readonly summary?: string;
+    readonly meta?: JsonObject;
+    readonly metaSchema?: string;
+};
+type DotManifestLike = {
+    readonly app: {
+        readonly name: string;
+        readonly version?: string;
+    };
+    readonly actions: readonly DotActionLike[];
+};
+/** The DOT action declaration derived from a contract. */
 export type RouteMeta = {
     readonly id: string;
-    readonly method: string;
-    readonly path: string;
-    readonly transport: 'http';
-    readonly description?: string;
-    readonly input?: {
-        readonly query?: JsonObject;
-        readonly body?: JsonObject;
-    };
-    readonly output?: JsonObject;
-    readonly streaming?: boolean;
+    readonly binding: 'http';
+    readonly direction: 'in';
+    readonly address: string;
+    readonly summary?: string;
+    readonly metaSchema: typeof HTTP_ACTION_META_SCHEMA;
+    readonly meta: JsonObject;
 };
 /**
- * Manifest metadata for a contract — what `registerRoutes` (from
- * `@arki/http/dot`) feeds into `ctx.registerRoute` so that
- * `dot explain --openapi` can render without booting. SSE contracts mark
- * `streaming` and carry the per-event schema as `output`.
+ * Manifest metadata for a contract — what contract `toDotAction()` returns
+ * for DOT plugins and what `registerRoutes` feeds into `ctx.registerAction`
+ * during the shim window. SSE contracts mark `streaming` and carry the
+ * per-event schema as `output`.
  */
 export declare function contractMeta(contract: ContractLike): RouteMeta;
+export declare function toOpenApiFromManifest(manifest: DotManifestLike): JsonObject;
 export {};
 //# sourceMappingURL=openapi.d.ts.map

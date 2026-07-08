@@ -29,6 +29,8 @@ export const HTTP_ERROR_CODES = {
     invalidMount: 'ARKI_HTTP_E006',
     /** A deriver key duplicates an earlier deriver or a base context key. */
     duplicateDeriverKey: 'ARKI_HTTP_E007',
+    /** A DOT HTTP action carries missing or incompatible projection metadata. */
+    invalidActionMeta: 'ARKI_HTTP_E009',
     /** Request validation failed (query/body) or the body is not valid JSON. */
     badRequest: 'ARKI_HTTP_E400',
     /** A deriver rejected the request's credentials. */

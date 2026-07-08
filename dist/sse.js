@@ -30,7 +30,7 @@ export function sseResponse(iterable, contract, signal) {
         }
         catch {
             // Generator cleanup failures have no caller to surface to here; the
-            // generator's own resources are the pip's responsibility.
+            // generator's own resources are the plugin's responsibility.
         }
     };
     const stream = new ReadableStream({

@@ -10,7 +10,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import type { MountBinding, RouteBinding, RouteBundle } from './bundle.js';
+import type { MountBinding, RouteBinding, RouteBundle, RpcBinding } from './bundle.js';
 import type { ContractLike } from './contract.js';
 import { runWithRequestContext } from './context.js';
 import type { BaseRequestCtx } from './derive.js';
@@ -27,7 +27,7 @@ export type Engine = {
 /**
  * Compose bundles into a single fetch handler. Throws
  * `ARKI_HTTP_E002`/`E006` on route collisions and malformed mounts —
- * callers (the `http()` pip's `boot`) let these bubble as boot failures.
+ * callers (the `http()` plugin's `boot`) let these bubble as boot failures.
  */
 export function buildEngine(bundles: readonly RouteBundle[]): Engine {
   const app = new Hono();
@@ -38,6 +38,10 @@ export function buildEngine(bundles: readonly RouteBundle[]): Engine {
     for (const mount of bundle.mounts) {
       registerMount(app, claimed, mount);
       routeIds.push(mount.id);
+    }
+    for (const rpc of bundle.rpcs ?? []) {
+      registerRpc(app, claimed, bundle, rpc);
+      routeIds.push(rpc.id);
     }
     for (const binding of bundle.bindings) {
       registerBinding(app, claimed, bundle, binding);
@@ -68,6 +72,51 @@ function registerMount(app: Hono, claimed: Map<string, string>, mount: MountBind
   }
   claimed.set(key, mount.id);
   app.mount(mount.path, mount.handler);
+}
+
+function registerRpc(app: Hono, claimed: Map<string, string>, bundle: RouteBundle, rpc: RpcBinding): void {
+  // Rpc mounts share the mount claim namespace: an rpc prefix colliding
+  // with a raw mount (or another rpc) is the same routing bug.
+  const key = `MOUNT ${rpc.path}`;
+  const prior = claimed.get(key);
+  if (prior !== undefined) {
+    throw new HttpConfigError({
+      code: HTTP_ERROR_CODES.duplicateRoute,
+      message: `[http] duplicate mount at "${rpc.path}": "${rpc.id}" collides with "${prior}".`,
+      remediation: 'Give each mounted handler a distinct path prefix.',
+    });
+  }
+  claimed.set(key, rpc.id);
+  // `replaceRequest: false` — the bound handler must see the ORIGINAL
+  // request. oRPC/tRPC fetch adapters take the mount path as their own
+  // `prefix`/`endpoint` option, and derivers/`context` read `req.url`;
+  // Hono's default mount rewrite (prefix-stripped URL) breaks both.
+  app.mount(rpc.path, req => executeRpc(bundle, rpc, req), { replaceRequest: false });
+}
+
+async function executeRpc(bundle: RouteBundle, rpc: RpcBinding, req: Request): Promise<Response> {
+  const base: BaseRequestCtx = {
+    req,
+    url: new URL(req.url),
+    requestId: req.headers.get('x-request-id') ?? crypto.randomUUID(),
+    signal: req.signal,
+  };
+  return runWithRequestContext(base, async () => {
+    try {
+      let ctx: BaseRequestCtx & Record<string, unknown> = base;
+      for (const deriver of bundle.derivers) {
+        // Same erasure boundary as executeBinding.
+        const value = await deriver.derive(req, ctx as never);
+        ctx = { ...ctx, [deriver.key]: value };
+      }
+      const rpcCtx = await rpc.context(req, ctx as never);
+      // The rpc handler owns its subtree's responses (including its own
+      // error format); only THROWN errors fall through to the envelope.
+      return await rpc.handle(req, rpcCtx as never);
+    } catch (error) {
+      return toErrorResponse(error);
+    }
+  });
 }
 
 function registerBinding(app: Hono, claimed: Map<string, string>, bundle: RouteBundle, binding: RouteBinding): void {

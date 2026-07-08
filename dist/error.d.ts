@@ -29,6 +29,8 @@ export declare const HTTP_ERROR_CODES: {
     readonly invalidMount: "ARKI_HTTP_E006";
     /** A deriver key duplicates an earlier deriver or a base context key. */
     readonly duplicateDeriverKey: "ARKI_HTTP_E007";
+    /** A DOT HTTP action carries missing or incompatible projection metadata. */
+    readonly invalidActionMeta: "ARKI_HTTP_E009";
     /** Request validation failed (query/body) or the body is not valid JSON. */
     readonly badRequest: "ARKI_HTTP_E400";
     /** A deriver rejected the request's credentials. */

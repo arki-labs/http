@@ -34,7 +34,7 @@ export function sseResponse(iterable: AsyncIterable<unknown>, contract: Contract
       await iterator.return?.();
     } catch {
       // Generator cleanup failures have no caller to surface to here; the
-      // generator's own resources are the pip's responsibility.
+      // generator's own resources are the plugin's responsibility.
     }
   };
 

@@ -9,6 +9,7 @@
  */
 import { z } from 'zod';
 import { HTTP_ERROR_CODES, HttpConfigError } from './error.js';
+export const HTTP_ACTION_META_SCHEMA = '@arki/http/action-meta@1';
 /**
  * Convert a contract schema to JSON Schema. Schema erasure seam:
  * {@link ContractLike} types schemas as `parse`-only, but contracts built
@@ -19,7 +20,64 @@ function toJsonSchema(schema) {
     const json = z.toJSONSchema(schema);
     // The dialect header is noise when embedding into OpenAPI 3.1.
     const { $schema: _dialect, ...rest } = json;
-    return rest;
+    return toJsonObject(rest);
+}
+function toJsonObject(value) {
+    let serialized;
+    try {
+        serialized = JSON.stringify(value);
+    }
+    catch (error) {
+        throw new TypeError('Value must be JSON-serializable manifest data.', { cause: error });
+    }
+    if (serialized === undefined)
+        throw new TypeError('Value must be a JSON-serializable object.');
+    const parsed = JSON.parse(serialized);
+    if (!isJsonObject(parsed) || !jsonDeepEqual(value, parsed)) {
+        throw new TypeError('Value must be a JSON-serializable object without lossy coercions.');
+    }
+    return parsed;
+}
+function isJsonPrimitive(value) {
+    return value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number';
+}
+function isPlainObject(value) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+        return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+}
+function isJsonValue(value) {
+    if (isJsonPrimitive(value))
+        return typeof value !== 'number' || Number.isFinite(value);
+    if (Array.isArray(value))
+        return value.every(isJsonValue);
+    if (!isPlainObject(value))
+        return false;
+    return Object.values(value).every(isJsonValue);
+}
+function isJsonObject(value) {
+    return isPlainObject(value) && Object.values(value).every(isJsonValue);
+}
+function jsonDeepEqual(left, right) {
+    if (isJsonPrimitive(left) || isJsonPrimitive(right))
+        return Object.is(left, right);
+    if (Array.isArray(left) || Array.isArray(right)) {
+        if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length)
+            return false;
+        return left.every((value, index) => jsonDeepEqual(value, right[index]));
+    }
+    if (!isPlainObject(left) || !isPlainObject(right))
+        return false;
+    const leftEntries = Object.entries(left);
+    const rightEntries = Object.entries(right);
+    if (leftEntries.length !== rightEntries.length)
+        return false;
+    for (const [key, value] of leftEntries) {
+        if (!Object.hasOwn(right, key) || !jsonDeepEqual(value, right[key]))
+            return false;
+    }
+    return true;
 }
 function pathParamNames(path) {
     return [...path.matchAll(/:(\w+)/g)]
@@ -29,16 +87,20 @@ function pathParamNames(path) {
 function openApiPath(path) {
     return path.replaceAll(/:(\w+)/g, '{$1}');
 }
-function queryParameters(schema) {
-    const json = toJsonSchema(schema);
-    const properties = (json['properties'] ?? {});
-    const required = new Set(json['required']);
+function queryParametersFromSchemaObject(json) {
+    const properties = isJsonObject(json['properties']) ? json['properties'] : {};
+    const required = Array.isArray(json['required'])
+        ? new Set(json['required'].filter((value) => typeof value === 'string'))
+        : new Set();
     return Object.entries(properties).map(([name, propertySchema]) => ({
         name,
         in: 'query',
         required: required.has(name),
         schema: propertySchema,
     }));
+}
+function queryParameters(schema) {
+    return queryParametersFromSchemaObject(toJsonSchema(schema));
 }
 function buildOperation(contract) {
     const parameters = pathParamNames(contract.path).map(name => ({
@@ -83,6 +145,52 @@ function buildOperation(contract) {
     }
     return operation;
 }
+function buildOperationFromAction(action) {
+    const parameters = pathParamNames(action.path).map(name => ({
+        name,
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+    }));
+    if (action.input?.query !== undefined)
+        parameters.push(...queryParametersFromSchemaObject(action.input.query));
+    const operation = {
+        operationId: action.id,
+        tags: [action.plugin],
+    };
+    if (action.summary !== undefined)
+        operation['summary'] = action.summary;
+    if (parameters.length > 0)
+        operation['parameters'] = parameters;
+    if (action.input?.body !== undefined) {
+        operation['requestBody'] = {
+            required: true,
+            content: { 'application/json': { schema: action.input.body } },
+        };
+    }
+    if (action.streaming === true) {
+        operation['responses'] = {
+            '200': {
+                description: 'event stream',
+                content: {
+                    'text/event-stream': action.output === undefined ? {} : { schema: action.output },
+                },
+            },
+        };
+    }
+    else if (action.output === undefined) {
+        operation['responses'] = { '200': { description: 'success' } };
+    }
+    else {
+        operation['responses'] = {
+            '200': {
+                description: 'success',
+                content: { 'application/json': { schema: action.output } },
+            },
+        };
+    }
+    return operation;
+}
 /**
  * Render an OpenAPI 3.1 document from contracts. Paths and operations
  * appear in contract order; duplicate method+path pairs fail loudly with
@@ -114,10 +222,10 @@ export function toOpenApi(contracts, info) {
     };
 }
 /**
- * Manifest metadata for a contract — what `registerRoutes` (from
- * `@arki/http/dot`) feeds into `ctx.registerRoute` so that
- * `dot explain --openapi` can render without booting. SSE contracts mark
- * `streaming` and carry the per-event schema as `output`.
+ * Manifest metadata for a contract — what contract `toDotAction()` returns
+ * for DOT plugins and what `registerRoutes` feeds into `ctx.registerAction`
+ * during the shim window. SSE contracts mark `streaming` and carry the
+ * per-event schema as `output`.
  */
 export function contractMeta(contract) {
     const input = {};
@@ -126,15 +234,98 @@ export function contractMeta(contract) {
     if (contract.body !== undefined)
         input.body = toJsonSchema(contract.body);
     const outputSchema = contract.kind === 'sse' ? contract.event : contract.output;
-    return {
-        id: contract.id,
+    const meta = {
         method: contract.method,
         path: contract.path,
-        transport: 'http',
-        ...(contract.summary === undefined ? {} : { description: contract.summary }),
-        ...(Object.keys(input).length === 0 ? {} : { input }),
-        ...(outputSchema === undefined ? {} : { output: toJsonSchema(outputSchema) }),
-        ...(contract.kind === 'sse' ? { streaming: true } : {}),
+    };
+    if (Object.keys(input).length > 0)
+        meta['input'] = input;
+    if (outputSchema !== undefined)
+        meta['output'] = toJsonSchema(outputSchema);
+    if (contract.kind === 'sse')
+        meta['streaming'] = true;
+    return {
+        id: contract.id,
+        binding: 'http',
+        direction: 'in',
+        address: `${contract.method} ${contract.path}`,
+        ...(contract.summary === undefined ? {} : { summary: contract.summary }),
+        metaSchema: HTTP_ACTION_META_SCHEMA,
+        meta,
+    };
+}
+function httpActionFromManifestAction(action) {
+    if (action.binding !== 'http')
+        return null;
+    if (action.metaSchema !== undefined && action.metaSchema !== HTTP_ACTION_META_SCHEMA) {
+        throw new HttpConfigError({
+            code: HTTP_ERROR_CODES.invalidActionMeta,
+            message: `[http] action "${action.id}" uses unsupported meta schema "${action.metaSchema}".`,
+            remediation: `HTTP projections require ${HTTP_ACTION_META_SCHEMA}; omit metaSchema only for legacy registerRoute shim output during the DOT 0.4 migration window.`,
+        });
+    }
+    const meta = action.meta;
+    if (meta === undefined) {
+        throw new HttpConfigError({
+            code: HTTP_ERROR_CODES.invalidActionMeta,
+            message: `[http] action "${action.id}" has no HTTP metadata.`,
+            remediation: 'Register HTTP actions through route contracts or registerRoute during the migration window.',
+        });
+    }
+    const method = meta['method'];
+    const path = meta['path'];
+    if (typeof method !== 'string' || typeof path !== 'string') {
+        throw new HttpConfigError({
+            code: HTTP_ERROR_CODES.invalidActionMeta,
+            message: `[http] action "${action.id}" is missing string method/path metadata.`,
+            remediation: 'HTTP action meta must include string `method` and `path` fields.',
+        });
+    }
+    const inputValue = meta['input'];
+    const outputValue = meta['output'];
+    const streamingValue = meta['streaming'];
+    const input = isJsonObject(inputValue)
+        ? {
+            ...(isJsonObject(inputValue['query']) ? { query: inputValue['query'] } : {}),
+            ...(isJsonObject(inputValue['body']) ? { body: inputValue['body'] } : {}),
+        }
+        : undefined;
+    return {
+        id: action.id,
+        plugin: action.plugin,
+        method,
+        path,
+        ...(action.summary === undefined ? {} : { summary: action.summary }),
+        ...(input === undefined || Object.keys(input).length === 0 ? {} : { input }),
+        ...(isJsonObject(outputValue) ? { output: outputValue } : {}),
+        ...(typeof streamingValue === 'boolean' ? { streaming: streamingValue } : {}),
+    };
+}
+export function toOpenApiFromManifest(manifest) {
+    const paths = {};
+    for (const manifestAction of manifest.actions) {
+        const action = httpActionFromManifestAction(manifestAction);
+        if (action === null)
+            continue;
+        const path = openApiPath(action.path);
+        const entry = (paths[path] ??= {});
+        const method = action.method.toLowerCase();
+        if (entry[method] !== undefined) {
+            throw new HttpConfigError({
+                code: HTTP_ERROR_CODES.duplicateRoute,
+                message: `[http] duplicate route ${action.method} ${action.path}: "${action.id}" collides with an earlier action.`,
+                remediation: 'Two HTTP actions claim the same method and path. Change one path, or drop the duplicate.',
+            });
+        }
+        entry[method] = buildOperationFromAction(action);
+    }
+    return {
+        openapi: '3.1.0',
+        info: {
+            title: manifest.app.name,
+            version: manifest.app.version ?? '0.0.0',
+        },
+        paths,
     };
 }
 //# sourceMappingURL=openapi.js.map

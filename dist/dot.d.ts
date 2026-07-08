@@ -1,10 +1,10 @@
 /**
- * DOT adapter for `@arki/http` — the `http()` pip.
+ * DOT adapter for `@arki/http` — the `http()` plugin.
  *
- * Mount it LAST. Feature pips publish {@link RouteBundle}s as token
+ * Mount it LAST. Feature plugins publish {@link RouteBundle}s as token
  * services in their `boot`; `http()` derives its `needs` from the tokens
  * you pass, so the app builder's wiring guard enforces — at compile time —
- * that every listed bundle is provided by an earlier pip:
+ * that every listed bundle is provided by an earlier plugin:
  *
  * ```ts
  * import { defineApp } from '@arki/dot';
@@ -12,8 +12,8 @@
  *
  * const app = await defineApp('shop-api')
  *   .use(db({ url }))
- *   .use(ordersPip)          // publishes OrdersRoutes
- *   .use(billingPip)         // publishes BillingRoutes
+ *   .use(ordersPlugin)          // publishes OrdersRoutes
+ *   .use(billingPlugin)         // publishes BillingRoutes
  *   .use(http({ port: 3000, bundles: [OrdersRoutes, BillingRoutes] }))
  *   .start();
  * ```
@@ -25,7 +25,7 @@
  *  - `start`   — listen (first among starts — the route table is final).
  *  - `stop`    — stop accepting, drain in-flight handlers
  *                (`drainTimeoutMs`). Reverse order puts this FIRST:
- *                ingress stops before feature pips tear down.
+ *                ingress stops before feature plugins tear down.
  *  - `dispose` — sever remaining connections (open SSE streams end here)
  *                and release the port.
  *
@@ -33,14 +33,16 @@
  * without `@arki/dot` installed fails at module load — intentional: the
  * adapter only makes sense inside a DOT app.
  */
-import type { DotConfigureContext, Pip, Token } from '@arki/dot/pip';
+import type { DotConfigureContext, Plugin, Token } from '@arki/dot/plugin';
+import type { Lazy } from '@arki/ts';
 import type { RouteBundle } from './bundle.js';
 import type { ContractLike } from './contract.js';
 import type { HttpMiddleware } from './engine.js';
 /** A token publishing a {@link RouteBundle} — what `options.bundles` lists. */
 export type BundleToken = Token<RouteBundle, string>;
+export type HttpFeatureToken = Token<object, string>;
 /**
- * The service the `http()` pip publishes. `fetch` is the composed handler
+ * The service the `http()` plugin publishes. `fetch` is the composed handler
  * — also the unit-test seam: call the app without a socket. `port`/`url`
  * are defined once the app has started.
  */
@@ -55,16 +57,29 @@ export type HttpServer = {
 export type HttpServices = {
     readonly httpServer: HttpServer;
 };
-export type HttpOptions<TBundles extends readonly BundleToken[]> = {
-    /** Port to listen on in `start`. `0` picks an ephemeral port. */
-    readonly port: number;
+export type HttpOptions<TBundles extends readonly BundleToken[] = readonly [], TFeatures extends readonly HttpFeatureToken[] = readonly []> = {
+    /**
+     * Port to listen on in `start`. `0` picks an ephemeral port. Pass a
+     * THUNK to defer the read to `start` — declarations stay import-pure
+     * (no env observation at module load), e.g. `http({ port: () => env.PORT })`.
+     *
+     * Unlike `kv()`, the whole options object cannot be thunked here:
+     * `bundles`/`features` are declaration-time wiring (they shape the
+     * plugin's needs), so only runtime settings like `port` defer.
+     */
+    readonly port: Lazy<number>;
     readonly hostname?: string;
     /**
      * Bundle tokens to serve, in route-table order. Each becomes a `needs`
      * entry — the wiring guard rejects the composition unless an earlier
-     * pip publishes it.
+     * plugin publishes it.
      */
-    readonly bundles: TBundles;
+    readonly bundles?: TBundles;
+    /**
+     * Feature tokens that may publish an HTTP `routes` slice. Missing slices
+     * are treated as empty so partial backend features stay zero-config.
+     */
+    readonly features?: TFeatures;
     /**
      * App-wide fetch-shaped middleware (first = outermost): CORS, request
      * logging, compression. For per-request values use bundle derivers —
@@ -78,23 +93,27 @@ export type HttpOptions<TBundles extends readonly BundleToken[]> = {
 export type BundleNeeds<TBundles extends readonly BundleToken[]> = {
     readonly [Tok in TBundles[number] as Tok extends Token<RouteBundle, infer K> ? K : never]: RouteBundle;
 };
+export type HttpFeatureNeeds<TFeatures extends readonly HttpFeatureToken[]> = {
+    readonly [Tok in TFeatures[number] as Tok extends Token<unknown, infer K> ? K : never]: Tok extends Token<infer TPayload, string> ? TPayload : never;
+};
 /**
- * Stable error codes thrown by the http pip beyond the engine's own.
+ * Stable error codes thrown by the http plugin beyond the engine's own.
  * Exported so consumers and coding agents can match against them.
  */
-export declare const HTTP_PIP_ERROR_CODES: {
-    /** A bundle token's service was missing from the boot context (erased composition only). */
+export declare const HTTP_PLUGIN_ERROR_CODES: {
+    /** A bundle or feature token's service was missing from the boot context (erased composition only). */
     readonly bundleMissing: "ARKI_HTTP_E008";
 };
 /**
- * Build the DOT pip that serves the given bundles. See the module docs
+ * Build the DOT plugin that serves the given bundles. See the module docs
  * for the composition pattern and lifecycle mapping.
  */
-export declare function http<const TBundles extends readonly BundleToken[]>(options: HttpOptions<TBundles>): Pip<BundleNeeds<TBundles>, HttpServices>;
+export declare function http<const TBundles extends readonly BundleToken[] = readonly [], const TFeatures extends readonly HttpFeatureToken[] = readonly []>(options: HttpOptions<TBundles, TFeatures>): Plugin<BundleNeeds<TBundles> & HttpFeatureNeeds<TFeatures>, HttpServices>;
 /**
- * Register contracts in the DOT manifest from a feature pip's `configure`
- * hook. Converts zod schemas to JSON Schema once, at configure time, so
- * `dot explain --openapi` renders without booting:
+ * Deprecated shim for registering contracts from a feature plugin's `configure`
+ * hook. Prefer declaring contracts directly in `actions: [...]` on the plugin.
+ * Converts zod schemas to JSON Schema once, at configure time, so
+ * `dot explain --as openapi` renders without booting:
  *
  * ```ts
  * configure(ctx) {

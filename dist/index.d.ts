@@ -8,13 +8,13 @@
  *
  * The framework-agnostic core lives here — {@link buildEngine} +
  * {@link listen} run a server without any framework. The DOT adapter (the
- * `http()` pip) lives at `@arki/http/dot`; the ambient request context —
+ * `http()` plugin) lives at `@arki/http/dot`; the ambient request context —
  * a deliberate last resort — at `@arki/http/context`.
  */
 export { route } from './contract.js';
 export type { ContractLike, HttpMethod, ParamsOf, PathParams, RouteContract, SchemaLike, SseContract, } from './contract.js';
-export { routes } from './bundle.js';
-export type { HandlerResult, MountBinding, MountMeta, MountTransport, RouteBinding, RouteBundle, RouteBundleBuilder, RouteHandler, RouteInput, SseHandler, } from './bundle.js';
+export { endpoints, routes, rpcMount } from './bundle.js';
+export type { EndpointsFeatureSlice, HandlerResult, MountBinding, MountMeta, MountTransport, RouteBinding, RouteBundle, RouteBundleBuilder, RouteHandler, RouteInput, RpcActionMeta, RpcBinding, RpcMountContract, RpcMountHandlers, RpcMountOptions, SseHandler, } from './bundle.js';
 export { BASE_CTX_KEYS, derive } from './derive.js';
 export type { BaseRequestCtx, Deriver, ErasedDeriver } from './derive.js';
 export { describeInternalError, errorResponse, HTTP_ERROR_CODES, HttpConfigError, HttpError, toErrorResponse } from './error.js';

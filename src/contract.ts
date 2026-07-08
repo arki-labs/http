@@ -13,6 +13,9 @@
 
 import type { z } from 'zod';
 
+import type { RouteMeta } from './openapi.js';
+import { contractMeta } from './openapi.js';
+
 /** Methods a {@link RouteContract} can declare. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -53,6 +56,7 @@ export type RouteContract<TPath extends string = string, TQuery = undefined, TBo
   readonly query?: z.ZodType<TQuery>;
   readonly body?: z.ZodType<TBody>;
   readonly output?: z.ZodType<TOutput>;
+  toDotAction(): RouteMeta;
 };
 
 /**
@@ -71,6 +75,7 @@ export type SseContract<TPath extends string = string, TQuery = undefined, TEven
   readonly event: z.ZodType<TEvent>;
   /** Emit `:keepalive` comments at this interval. Off when omitted. */
   readonly heartbeatMs?: number;
+  toDotAction(): RouteMeta;
 };
 
 /**
@@ -89,6 +94,7 @@ export type ContractLike = {
   readonly output?: SchemaLike;
   readonly event?: SchemaLike;
   readonly heartbeatMs?: number;
+  toDotAction(): RouteMeta;
 };
 
 type RouteDef<TQuery, TBody, TOutput> = {
@@ -104,12 +110,16 @@ const makeRoute =
   <TPath extends string, TQuery = undefined, TBody = undefined, TOutput = undefined>(
     path: TPath,
     def: RouteDef<TQuery, TBody, TOutput>,
-  ): RouteContract<TPath, TQuery, TBody, TOutput> => ({
-    kind: 'http',
-    method,
-    path,
-    ...def,
-  });
+  ): RouteContract<TPath, TQuery, TBody, TOutput> => {
+    const contract: RouteContract<TPath, TQuery, TBody, TOutput> = {
+      kind: 'http',
+      method,
+      path,
+      ...def,
+      toDotAction: () => contractMeta(contract),
+    };
+    return contract;
+  };
 
 /**
  * Contract factories, one per method, plus {@link route.sse} for typed
@@ -143,10 +153,14 @@ export const route = {
       readonly event: z.ZodType<TEvent>;
       readonly heartbeatMs?: number;
     },
-  ): SseContract<TPath, TQuery, TEvent> => ({
-    kind: 'sse',
-    method: 'GET',
-    path,
-    ...def,
-  }),
+  ): SseContract<TPath, TQuery, TEvent> => {
+    const contract: SseContract<TPath, TQuery, TEvent> = {
+      kind: 'sse',
+      method: 'GET',
+      path,
+      ...def,
+      toDotAction: () => contractMeta(contract),
+    };
+    return contract;
+  },
 };

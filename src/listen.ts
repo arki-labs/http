@@ -3,7 +3,7 @@
  *
  * `Bun.serve` when the Bun global is present, `@hono/node-server`
  * otherwise. Neither runtime's types leak into the public surface; the
- * handle exposes exactly what the `http()` pip's lifecycle needs.
+ * handle exposes exactly what the `http()` plugin's lifecycle needs.
  */
 
 import { HTTP_ERROR_CODES, HttpConfigError } from './error.js';
