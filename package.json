@@ -1,6 +1,6 @@
 {
   "name": "@arki/http",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Typed HTTP for ARKI — route contracts as data, zod-validated handlers, request-scope derivers, SSE streaming, OpenAPI generation, and the DOT http() plugin.",
   "license": "MIT",
   "repository": {

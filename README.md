@@ -2,7 +2,7 @@
 
 Typed HTTP for ARKI — route contracts as data, zod-validated handlers,
 request-scope derivers, SSE streaming, and deterministic OpenAPI
-generation. Ships a DOT adapter (`@arki/http/dot`) whose `http()` pip
+generation. Ships a DOT adapter (`@arki/http/dot`) whose `http()` plugin
 turns a composed app into a running server with correct drain-on-shutdown
 semantics.
 
@@ -17,8 +17,8 @@ A route is split in two:
   a stable id. Registerable in the DOT manifest (sync `configure`),
   renderable as OpenAPI without booting, and the source of the handler's
   inferred signature.
-- **Binding** — the handler, attached inside a pip's `boot` where the
-  pip's typed needs are already injected. Handlers close over real
+- **Binding** — the handler, attached inside a plugin's `boot` where the
+  plugin's typed needs are already injected. Handlers close over real
   services; no service locator exists.
 
 ```ts
@@ -45,12 +45,12 @@ coded envelope: `{ "error": { "code", "message", "remediation?", "docsUrl?" } }`
 ## Inside a DOT app
 
 ```ts
-import { pip, provide, service, token } from '@arki/dot/pip';
+import { plugin, provide, service, token } from '@arki/dot/plugin';
 import { routes, type RouteBundle } from '@arki/http';
 
 export const OrdersRoutes = token<RouteBundle>()('orders.routes');
 
-export const ordersPip = pip({
+export const ordersPlugin = plugin({
   name: 'orders',
   needs: { db: service<Db>() },
   actions: [listOrders, createOrder], // manifest + OpenAPI metadata
@@ -65,7 +65,7 @@ export const ordersPip = pip({
 });
 ```
 
-Mount the `http()` pip **last**, naming the bundles it serves:
+Mount the `http()` plugin **last**, naming the bundles it serves:
 
 ```ts
 import { defineApp, hookSignals } from '@arki/dot';
@@ -73,7 +73,7 @@ import { http } from '@arki/http/dot';
 
 const app = await defineApp('shop-api')
   .use(db({ url: DATABASE_URL }))
-  .use(ordersPip)
+  .use(ordersPlugin)
   .use(http({ port: 3000, bundles: [OrdersRoutes] }))
   .start();
 
@@ -81,10 +81,10 @@ hookSignals(app);
 ```
 
 `http()` derives its `needs` from the tokens you pass — forget to mount
-`ordersPip` and the `.use(http(...))` line fails to typecheck. Because the
-pip is declared last, reverse-order `stop` halts ingress FIRST: the server
+`ordersPlugin` and the `.use(http(...))` line fails to typecheck. Because the
+plugin is declared last, reverse-order `stop` halts ingress FIRST: the server
 stops accepting, drains in-flight requests (`drainTimeoutMs`, default
-10 s, `ARKI_HTTP_E005` on overrun), and only then do feature pips tear
+10 s, `ARKI_HTTP_E005` on overrun), and only then do feature plugins tear
 down. `boot` builds the router without listening; `start` listens;
 `dispose` severs remaining connections and releases the port.
 
