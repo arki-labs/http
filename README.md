@@ -221,6 +221,58 @@ Stable API — match on codes, never parse messages.
 `E4xx`/`E5xx` codes surface on the wire in the error envelope. Unexpected
 error messages are redacted when `NODE_ENV=production`.
 
+<!-- bench:start -->
+## Benchmarks
+
+Each router receives a real `Request` and returns a `Response`, in process, with no network. `@arki/http` is built on hono, so hono is the direct reference; itty-router is the small, hand-wired alternative. All three serve the same 20 routes and validate bodies with the same zod schema.
+
+Node v22.13.1 on Apple M2 Max, 2026-10-13. Median time per operation, lower is better.
+
+### Static GET (one of 20 routes)
+
+| Library | Time / op | vs fastest |
+| --- | ---: | ---: |
+| @arki/http (route contracts) | 46.83 µs | 1.41× |
+| hono (+ @hono/zod-validator for bodies) | 33.17 µs | fastest |
+| itty-router v5 (hand-written validation) | 35.46 µs | 1.07× |
+
+### GET with a path parameter
+
+| Library | Time / op | vs fastest |
+| --- | ---: | ---: |
+| @arki/http (route contracts) | 28.75 µs | 1.33× |
+| hono (+ @hono/zod-validator for bodies) | 21.54 µs | fastest |
+| itty-router v5 (hand-written validation) | 26.25 µs | 1.22× |
+
+### POST with a valid JSON body
+
+Body parsed and checked with the same zod schema in all three. `@arki/http` also checks the output.
+
+| Library | Time / op | vs fastest |
+| --- | ---: | ---: |
+| @arki/http (route contracts) | 40.54 µs | 1.12× |
+| hono (+ @hono/zod-validator for bodies) | 36.54 µs | 1.01× |
+| itty-router v5 (hand-written validation) | 36.21 µs | fastest |
+
+### POST with an invalid body (400)
+
+The failure path. `@arki/http` builds its typed error envelope; hono returns its validator error; itty returns a hand-written JSON error.
+
+| Library | Time / op | vs fastest |
+| --- | ---: | ---: |
+| @arki/http (route contracts) | 55.17 µs | 1.23× |
+| hono (+ @hono/zod-validator for bodies) | 53.08 µs | 1.18× |
+| itty-router v5 (hand-written validation) | 44.96 µs | fastest |
+
+Read the rows with the contracts in mind:
+
+- `@arki/http` runs on hono. The gap to plain hono is the price of the contract layer: every handler input (params, query, body) is validated against its contract, and every handler output is validated against the contract output schema, so a wrong response fails loudly instead of leaving the process.
+- The hono and itty-router rows do not validate handler output and have no route ids, no error envelope and no OpenAPI generation. Their `Request` and `Response` work is the same.
+- itty-router has no validation hook, so its rows parse the JSON and run the zod schema by hand, the way its docs suggest.
+
+Reproduce with `bun run bench` in the package directory; regenerate this section with `bun run bench --write-readme`.
+<!-- bench:end -->
+
 ## License
 
 MIT

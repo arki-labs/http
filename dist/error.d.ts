@@ -20,27 +20,27 @@
  */
 export declare const HTTP_ERROR_CODES: {
     /** `start` could not bind the port. */
-    readonly listenFailed: "ARKI_HTTP_E001";
+    readonly listenFailed: 'ARKI_HTTP_E001';
     /** Two bindings claim the same method + path. */
-    readonly duplicateRoute: "ARKI_HTTP_E002";
+    readonly duplicateRoute: 'ARKI_HTTP_E002';
     /** `stop` exceeded `drainTimeoutMs` with requests still in flight. */
-    readonly drainTimeout: "ARKI_HTTP_E005";
+    readonly drainTimeout: 'ARKI_HTTP_E005';
     /** A mount path is malformed. */
-    readonly invalidMount: "ARKI_HTTP_E006";
+    readonly invalidMount: 'ARKI_HTTP_E006';
     /** A deriver key duplicates an earlier deriver or a base context key. */
-    readonly duplicateDeriverKey: "ARKI_HTTP_E007";
+    readonly duplicateDeriverKey: 'ARKI_HTTP_E007';
     /** A DOT HTTP action carries missing or incompatible projection metadata. */
-    readonly invalidActionMeta: "ARKI_HTTP_E009";
+    readonly invalidActionMeta: 'ARKI_HTTP_E009';
     /** Request validation failed (query/body) or the body is not valid JSON. */
-    readonly badRequest: "ARKI_HTTP_E400";
+    readonly badRequest: 'ARKI_HTTP_E400';
     /** A deriver rejected the request's credentials. */
-    readonly unauthorized: "ARKI_HTTP_E401";
+    readonly unauthorized: 'ARKI_HTTP_E401';
     /** A deriver rejected the request's permissions. */
-    readonly forbidden: "ARKI_HTTP_E403";
+    readonly forbidden: 'ARKI_HTTP_E403';
     /** No route matches the request. */
-    readonly notFound: "ARKI_HTTP_E404";
+    readonly notFound: 'ARKI_HTTP_E404';
     /** Handler crash or output-schema violation. */
-    readonly internal: "ARKI_HTTP_E500";
+    readonly internal: 'ARKI_HTTP_E500';
 };
 /**
  * A per-request failure with an HTTP status and a stable code. Throw from

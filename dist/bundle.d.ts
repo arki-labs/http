@@ -132,8 +132,13 @@ export type RpcBinding = {
     readonly context: (req: Request, ctx: never) => unknown;
     readonly handle: (req: Request, ctx: never) => Response | Promise<Response>;
 };
+/**
+ * A mount path. It must start with "/": a relative path is a compile error,
+ * and `assertMountPath` still rejects it (and spaces) for code that skips types.
+ */
+export type MountPath = `/${string}`;
 /** Declare the static half of an RPC mount. See {@link RpcMountContract}. */
-export declare function rpcMount(path: string, options: RpcMountOptions): RpcMountContract;
+export declare function rpcMount(path: MountPath, options: RpcMountOptions): RpcMountContract;
 /**
  * A plain value: derivers + bound contracts + mounts. Published as an
  * ordinary DOT service under a token and collected by the `http()` plugin —
@@ -168,7 +173,7 @@ export type RouteBundleBuilder<TCtx extends BaseRequestCtx = BaseRequestCtx> = R
      * tRPC fetch adapter, a static-file handler. One manifest route, no
      * schemas, derivers do NOT run for mounted handlers.
      */
-    mount(path: string, handler: (req: Request) => Response | Promise<Response>, meta: MountMeta): RouteBundleBuilder<TCtx>;
+    mount(path: MountPath, handler: (req: Request) => Response | Promise<Response>, meta: MountMeta): RouteBundleBuilder<TCtx>;
     /**
      * Bind a static {@link RpcMountContract} to its boot-time handlers.
      * Unlike `mount`, the bundle's derivers RUN before dispatch, and the

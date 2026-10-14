@@ -14,7 +14,7 @@
 export { route } from './contract.js';
 export type { ContractLike, HttpMethod, ParamsOf, PathParams, RouteContract, SchemaLike, SseContract, } from './contract.js';
 export { endpoints, routes, rpcMount } from './bundle.js';
-export type { EndpointsFeatureSlice, HandlerResult, MountBinding, MountMeta, MountTransport, RouteBinding, RouteBundle, RouteBundleBuilder, RouteHandler, RouteInput, RpcActionMeta, RpcBinding, RpcMountContract, RpcMountHandlers, RpcMountOptions, SseHandler, } from './bundle.js';
+export type { EndpointsFeatureSlice, HandlerResult, MountBinding, MountMeta, MountPath, MountTransport, RouteBinding, RouteBundle, RouteBundleBuilder, RouteHandler, RouteInput, RpcActionMeta, RpcBinding, RpcMountContract, RpcMountHandlers, RpcMountOptions, SseHandler, } from './bundle.js';
 export { BASE_CTX_KEYS, derive } from './derive.js';
 export type { BaseRequestCtx, Deriver, ErasedDeriver } from './derive.js';
 export { describeInternalError, errorResponse, HTTP_ERROR_CODES, HttpConfigError, HttpError, toErrorResponse } from './error.js';

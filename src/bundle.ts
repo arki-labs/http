@@ -153,8 +153,14 @@ export type RpcBinding = {
   readonly handle: (req: Request, ctx: never) => Response | Promise<Response>;
 };
 
+/**
+ * A mount path. It must start with "/": a relative path is a compile error,
+ * and `assertMountPath` still rejects it (and spaces) for code that skips types.
+ */
+export type MountPath = `/${string}`;
+
 /** Declare the static half of an RPC mount. See {@link RpcMountContract}. */
-export function rpcMount(path: string, options: RpcMountOptions): RpcMountContract {
+export function rpcMount(path: MountPath, options: RpcMountOptions): RpcMountContract {
   assertMountPath(path, options.id);
   const transport = options.transport ?? 'orpc';
   return {
@@ -222,7 +228,7 @@ export type RouteBundleBuilder<TCtx extends BaseRequestCtx = BaseRequestCtx> = R
    * schemas, derivers do NOT run for mounted handlers.
    */
   mount(
-    path: string,
+    path: MountPath,
     handler: (req: Request) => Response | Promise<Response>,
     meta: MountMeta,
   ): RouteBundleBuilder<TCtx>;
@@ -291,7 +297,7 @@ function makeBuilder(state: BundleState): RouteBundleBuilder {
     bind(contract: ContractLike, handler: (input: never, ctx: never) => unknown): RouteBundleBuilder {
       return makeBuilder({ ...state, bindings: [...state.bindings, { contract, handler }] });
     },
-    mount(path: string, handler: (req: Request) => Response | Promise<Response>, meta: MountMeta): RouteBundleBuilder {
+    mount(path: MountPath, handler: (req: Request) => Response | Promise<Response>, meta: MountMeta): RouteBundleBuilder {
       assertMountPath(path, meta.id);
       return makeBuilder({
         ...state,

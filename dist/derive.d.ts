@@ -32,7 +32,7 @@ export type BaseRequestCtx = {
     readonly signal: AbortSignal;
 };
 /** Base context keys — derivers may not shadow these. */
-export declare const BASE_CTX_KEYS: readonly ["req", "url", "requestId", "signal"];
+export declare const BASE_CTX_KEYS: readonly ['req', 'url', 'requestId', 'signal'];
 /**
  * A named, typed context deriver. `TIn` is the context the deriver needs
  * to see — a deriver written against {@link BaseRequestCtx} composes into

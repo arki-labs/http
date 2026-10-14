@@ -102,7 +102,7 @@ export type HttpFeatureNeeds<TFeatures extends readonly HttpFeatureToken[]> = {
  */
 export declare const HTTP_PLUGIN_ERROR_CODES: {
     /** A bundle or feature token's service was missing from the boot context (erased composition only). */
-    readonly bundleMissing: "ARKI_HTTP_E008";
+    readonly bundleMissing: 'ARKI_HTTP_E008';
 };
 /**
  * Build the DOT plugin that serves the given bundles. See the module docs

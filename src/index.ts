@@ -29,6 +29,7 @@ export type {
   HandlerResult,
   MountBinding,
   MountMeta,
+  MountPath,
   MountTransport,
   RouteBinding,
   RouteBundle,

@@ -1,5 +1,5 @@
 export declare function isPublicAddress(address: string): boolean;
-export declare function validatePublicURL(value: string): import("url").URL;
+export declare function validatePublicURL(value: string): import("node:url").URL;
 export declare function safeFetchBytes(value: string, options?: {
     maxBytes?: number;
     headers?: Record<string, string>;

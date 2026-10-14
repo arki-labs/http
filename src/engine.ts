@@ -12,9 +12,16 @@ import { z } from 'zod';
 
 import type { MountBinding, RouteBinding, RouteBundle, RpcBinding } from './bundle.js';
 import type { ContractLike } from './contract.js';
-import { runWithRequestContext } from './context.js';
 import type { BaseRequestCtx } from './derive.js';
-import { describeInternalError, errorResponse, HTTP_ERROR_CODES, HttpConfigError, HttpError, toErrorResponse } from './error.js';
+import { runWithRequestContext } from './context.js';
+import {
+  describeInternalError,
+  errorResponse,
+  HTTP_ERROR_CODES,
+  HttpConfigError,
+  HttpError,
+  toErrorResponse,
+} from './error.js';
 import { sseResponse } from './sse.js';
 
 /** A built engine: the composed fetch handler plus its route inventory. */
@@ -94,13 +101,25 @@ function registerRpc(app: Hono, claimed: Map<string, string>, bundle: RouteBundl
   app.mount(rpc.path, req => executeRpc(bundle, rpc, req), { replaceRequest: false });
 }
 
-async function executeRpc(bundle: RouteBundle, rpc: RpcBinding, req: Request): Promise<Response> {
-  const base: BaseRequestCtx = {
+function createBaseCtx(req: Request): BaseRequestCtx {
+  return {
     req,
     url: new URL(req.url),
     requestId: req.headers.get('x-request-id') ?? crypto.randomUUID(),
     signal: req.signal,
   };
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
+async function executeRpc(bundle: RouteBundle, rpc: RpcBinding, req: Request): Promise<Response> {
+  const base = createBaseCtx(req);
   return runWithRequestContext(base, async () => {
     try {
       let ctx: BaseRequestCtx & Record<string, unknown> = base;
@@ -135,48 +154,87 @@ function registerBinding(app: Hono, claimed: Map<string, string>, bundle: RouteB
   app.on(contract.method, contract.path, c => executeBinding(bundle, binding, c.req.raw, c.req.param()));
 }
 
-async function executeBinding(
+/**
+ * Run one bound route. A route with no derivers and no body has nothing to
+ * await before its handler, so it runs synchronously and returns the Response
+ * itself when the handler does — no promise, no extra microtask. Anything
+ * that needs an await goes through `executeBindingAsync`. Both paths give the
+ * same responses and the same error envelopes.
+ */
+function executeBinding(
   bundle: RouteBundle,
   binding: RouteBinding,
   req: Request,
   params: Record<string, string>,
-): Promise<Response> {
-  const base: BaseRequestCtx = {
-    req,
-    url: new URL(req.url),
-    requestId: req.headers.get('x-request-id') ?? crypto.randomUUID(),
-    signal: req.signal,
-  };
-  return runWithRequestContext(base, async () => {
+): Response | Promise<Response> {
+  const base = createBaseCtx(req);
+  if (bundle.derivers.length > 0 || binding.contract.body !== undefined) {
+    return runWithRequestContext(base, () => executeBindingAsync(bundle, binding, req, base, params));
+  }
+  return runWithRequestContext(base, () => {
     try {
-      let ctx: BaseRequestCtx & Record<string, unknown> = base;
-      for (const deriver of bundle.derivers) {
-        // Erasure boundary: derivers were stored with `never` context (see
-        // ErasedDeriver); the accumulated ctx is the value they were typed
-        // against at composition time.
-        const value = await deriver.derive(req, ctx as never);
-        ctx = { ...ctx, [deriver.key]: value };
-      }
-
-      const input = await validateInput(binding.contract, params, base.url, req);
-
-      if (binding.contract.kind === 'sse') {
-        // Erasure boundary, same as above — input/ctx match the handler's
-        // composition-time types.
-        const events = (binding.handler as (input: never, ctx: never) => AsyncIterable<unknown>)(
-          input as never,
-          ctx as never,
-        );
-        return sseResponse(events, binding.contract, base.signal);
-      }
-
-      const result = await (binding.handler as (input: never, ctx: never) => unknown)(input as never, ctx as never);
-      if (result instanceof Response) return result;
-      return serializeOutput(binding.contract, result);
+      return respond(binding, validateInputSync(binding.contract, params, base), base);
     } catch (error) {
       return toErrorResponse(error);
     }
   });
+}
+
+async function executeBindingAsync(
+  bundle: RouteBundle,
+  binding: RouteBinding,
+  req: Request,
+  base: BaseRequestCtx,
+  params: Record<string, string>,
+): Promise<Response> {
+  try {
+    let ctx: BaseRequestCtx & Record<string, unknown> = base;
+    for (const deriver of bundle.derivers) {
+      // Erasure boundary: derivers were stored with `never` context (see
+      // ErasedDeriver); the accumulated ctx is the value they were typed
+      // against at composition time.
+      const value = await deriver.derive(req, ctx as never);
+      ctx = { ...ctx, [deriver.key]: value };
+    }
+
+    const input =
+      binding.contract.body === undefined
+        ? validateInputSync(binding.contract, params, base)
+        : await validateInput(binding.contract, params, base, req);
+    return await respond(binding, input, ctx);
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+/** Call the handler and turn what it returns into a Response. Throws on a bad output. */
+function respond(binding: RouteBinding, input: ValidatedInput, ctx: BaseRequestCtx): Response | Promise<Response> {
+  if (binding.contract.kind === 'sse') {
+    // Erasure boundary, same as above — input/ctx match the handler's
+    // composition-time types.
+    const events = (binding.handler as (input: never, ctx: never) => AsyncIterable<unknown>)(
+      input as never,
+      ctx as never,
+    );
+    return sseResponse(events, binding.contract, ctx.signal);
+  }
+
+  const returned = binding.handler(input as never, ctx as never);
+  if (isPromiseLike(returned)) return settle(binding.contract, returned);
+  return toResponse(binding.contract, returned);
+}
+
+async function settle(contract: ContractLike, pending: PromiseLike<unknown>): Promise<Response> {
+  try {
+    return toResponse(contract, await pending);
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+function toResponse(contract: ContractLike, result: unknown): Response {
+  if (result instanceof Response) return result;
+  return serializeOutput(contract, result);
 }
 
 type ValidatedInput = {
@@ -185,18 +243,29 @@ type ValidatedInput = {
   readonly body: unknown;
 };
 
+function parseQuery(contract: ContractLike, base: BaseRequestCtx): unknown {
+  if (contract.query === undefined) return undefined;
+  // Multi-valued query params collapse to their last value here; declare
+  // arrays via a transform on the contract schema if you need them.
+  return parseWith(contract.query, Object.fromEntries(base.url.searchParams), 'query');
+}
+
+/** Params and query only: for contracts without a body. */
+function validateInputSync(
+  contract: ContractLike,
+  params: Record<string, string>,
+  base: BaseRequestCtx,
+): ValidatedInput {
+  return { params, query: parseQuery(contract, base), body: undefined };
+}
+
 async function validateInput(
   contract: ContractLike,
   params: Record<string, string>,
-  url: URL,
+  base: BaseRequestCtx,
   req: Request,
 ): Promise<ValidatedInput> {
-  let query: unknown;
-  if (contract.query !== undefined) {
-    // Multi-valued query params collapse to their last value here; declare
-    // arrays via a transform on the contract schema if you need them.
-    query = parseWith(contract.query, Object.fromEntries(url.searchParams), 'query');
-  }
+  const query = parseQuery(contract, base);
 
   let body: unknown;
   if (contract.body !== undefined) {
@@ -251,7 +320,19 @@ function serializeOutput(contract: ContractLike, result: unknown): Response {
       { cause: error },
     );
   }
-  return Response.json(validated);
+  return jsonResponse(validated);
+}
+
+/**
+ * Same response as `Response.json(value)` — the body is `JSON.stringify(value)`
+ * and the content type `application/json` — built from a string body, which
+ * costs less per request than `Response.json` in undici.
+ */
+function jsonResponse(value: unknown): Response {
+  const text = JSON.stringify(value);
+  // `Response.json` refuses a value with no JSON form (undefined, a function).
+  if (text === undefined) throw new TypeError('Value is not JSON serializable');
+  return new Response(text, { headers: { 'content-type': 'application/json' } });
 }
 
 /**
