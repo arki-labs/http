@@ -141,7 +141,7 @@ export type MountPath = `/${string}`;
 export declare function rpcMount(path: MountPath, options: RpcMountOptions): RpcMountContract;
 /**
  * A plain value: derivers + bound contracts + mounts. Published as an
- * ordinary DOT service under a token and collected by the `http()` plugin —
+ * ordinary DOT service under a token and collected by the `http()` driver —
  * no new kernel concept.
  */
 export type RouteBundle = {
@@ -184,7 +184,7 @@ export type RouteBundleBuilder<TCtx extends BaseRequestCtx = BaseRequestCtx> = R
 };
 /** Start an empty bundle. See the module docs for the authoring pattern. */
 export declare function routes(): RouteBundleBuilder;
-/** The `@arki/feature` slice contract an `endpoints(...)` declaration produces. */
+/** The `@arki/dot/feature` slice contract an `endpoints(...)` declaration produces. */
 export type EndpointsFeatureSlice<TServices> = {
     readonly key: 'routes';
     readonly actions: readonly never[];
@@ -192,10 +192,10 @@ export type EndpointsFeatureSlice<TServices> = {
 };
 /**
  * Declare a feature's HTTP surface as a boot-time slice
- * (`defineFeature(..., { use: [endpoints(build)] })`). The builder runs
+ * (`feature(..., { use: [endpoints(build)] })`). The builder runs
  * once at boot with the feature's needed services; the bundle lands
- * under `routes` in the feature's slice token — where
- * `http({ features })` collects it. Route contracts stay in the
+ * under `routes` in the feature's slice record — where the
+ * `.serve(http(...))` driver collects it. Route contracts stay in the
  * feature's `actions` list.
  */
 export declare function endpoints<TServices>(build: (services: TServices) => RouteBundle): EndpointsFeatureSlice<TServices>;

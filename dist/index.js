@@ -8,7 +8,7 @@
  *
  * The framework-agnostic core lives here — {@link buildEngine} +
  * {@link listen} run a server without any framework. The DOT adapter (the
- * `http()` plugin) lives at `@arki/http/dot`; the ambient request context —
+ * `http()` driver) lives at `@arki/http/dot`; the ambient request context —
  * a deliberate last resort — at `@arki/http/context`.
  */
 export { route } from './contract.js';

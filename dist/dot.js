@@ -1,10 +1,10 @@
 /**
- * DOT adapter for `@arki/http` — the `http()` plugin.
+ * DOT adapter for `@arki/http` — the `http()` driving adapter.
  *
- * Mount it LAST. Feature plugins publish {@link RouteBundle}s as token
- * services in their `boot`; `http()` derives its `needs` from the tokens
- * you pass, so the app builder's wiring guard enforces — at compile time —
- * that every listed bundle is provided by an earlier plugin:
+ * `http()` is a driver: `.serve(http(...))` binds it to the features the
+ * app mounted, and it serves every feature's `routes` slice (declared with
+ * `endpoints(...)` in the feature's `use` list). The app never lists its
+ * features twice:
  *
  * ```ts
  * import { defineApp } from '@arki/dot';
@@ -12,20 +12,26 @@
  *
  * const app = await defineApp('shop-api')
  *   .use(db({ url }))
- *   .use(ordersPlugin)          // publishes OrdersRoutes
- *   .use(billingPlugin)         // publishes BillingRoutes
- *   .use(http({ port: 3000, bundles: [OrdersRoutes, BillingRoutes] }))
+ *   .features([orders, billing])   // each declares `use: [endpoints(build)]`
+ *   .serve(http({ port: 3000 }))
  *   .start();
  * ```
  *
- * Lifecycle mapping — mounting last is what makes the drain order right:
+ * Route bundles published as plain token services (not features) are
+ * listed in `bundles`. Each becomes a need, so the builder's wiring guard
+ * rejects the app at compile time unless an earlier unit provides it.
+ * Bundle routes come first in the route table, then feature routes in
+ * mount order.
+ *
+ * Lifecycle mapping — `.serve()` mounts after every feature, which is what
+ * makes the drain order right:
  *
  *  - `boot`    — collect bundles, build the router, publish `httpServer`.
  *                NOT listening yet; all feature boots finish first.
  *  - `start`   — listen (first among starts — the route table is final).
  *  - `stop`    — stop accepting, drain in-flight handlers
  *                (`drainTimeoutMs`). Reverse order puts this FIRST:
- *                ingress stops before feature plugins tear down.
+ *                ingress stops before features tear down.
  *  - `dispose` — sever remaining connections (open SSE streams end here)
  *                and release the port.
  *
@@ -33,6 +39,7 @@
  * without `@arki/dot` installed fails at module load — intentional: the
  * adapter only makes sense inside a DOT app.
  */
+import { driver, sliceOf } from '@arki/dot/feature';
 import { DotPluginError, plugin } from '@arki/dot/plugin';
 import { resolveLazy } from '@arki/ts';
 import { buildEngine, composeMiddleware } from './engine.js';
@@ -43,8 +50,10 @@ import { listen } from './listen.js';
  * Exported so consumers and coding agents can match against them.
  */
 export const HTTP_PLUGIN_ERROR_CODES = {
-    /** A bundle or feature token's service was missing from the boot context (erased composition only). */
+    /** A bundle token's service was missing from the boot context (erased composition only). */
     bundleMissing: 'ARKI_HTTP_E008',
+    /** A feature's `routes` slice is not a route bundle (hand-minted slice, not `endpoints()`). */
+    routesSliceInvalid: 'ARKI_HTTP_E010',
 };
 const DEFAULT_DRAIN_TIMEOUT_MS = 10_000;
 function drained(gauge, timeoutMs) {
@@ -63,16 +72,41 @@ function drained(gauge, timeoutMs) {
         });
     });
 }
+function isRouteBundle(value) {
+    return (typeof value === 'object' &&
+        value !== null &&
+        'derivers' in value &&
+        Array.isArray(value.derivers) &&
+        'bindings' in value &&
+        Array.isArray(value.bindings) &&
+        'mounts' in value &&
+        Array.isArray(value.mounts));
+}
+/** The `routes` slice of one mounted feature, or `undefined` when it declares none. */
+function featureRoutes(ctx, f) {
+    const routes = sliceOf(ctx, f)['routes'];
+    if (routes === undefined)
+        return undefined;
+    if (!isRouteBundle(routes)) {
+        throw new DotPluginError({
+            code: HTTP_PLUGIN_ERROR_CODES.routesSliceInvalid,
+            message: `[http] feature "${f.name}" published a "routes" slice that is not a route bundle.`,
+            remediation: 'Declare the feature\'s HTTP surface with endpoints(build) from @arki/http, where build returns routes()….',
+            docsUrl: 'https://arki.dev/http/errors/arki-http-e010',
+        });
+    }
+    return routes;
+}
 function displayHost(hostname) {
     return hostname === '0.0.0.0' || hostname === '::' ? 'localhost' : hostname;
 }
 /**
- * Build the DOT plugin that serves the given bundles. See the module docs
- * for the composition pattern and lifecycle mapping.
+ * The HTTP driving adapter. `.serve(http(...))` binds it to the app's
+ * features; it serves the listed bundles plus every feature's `routes`
+ * slice. See the module docs for the composition pattern and lifecycle.
  */
 export function http(options) {
     const bundleTokens = options.bundles ?? [];
-    const featureTokens = options.features ?? [];
     const needs = {};
     for (const tok of bundleTokens) {
         if (needs[tok.key] !== undefined) {
@@ -84,25 +118,23 @@ export function http(options) {
         }
         needs[tok.key] = tok;
     }
-    for (const tok of featureTokens) {
-        if (needs[tok.key] !== undefined) {
-            throw new HttpConfigError({
-                code: HTTP_ERROR_CODES.duplicateRoute,
-                message: `[http] feature token "${tok.key}" is listed twice in options.features or duplicates a bundle token.`,
-                remediation: 'List each feature token once. To mount one feature twice, rename the publishing plugin.',
-            });
-        }
-        needs[tok.key] = tok;
-    }
+    // Erasure seam: the bound plugin is Plugin<{}, HttpServices> because its
+    // needs record is runtime-built; the cast re-attaches the token-derived
+    // needs so the builder's guard checks bundle provision at `.serve()`.
+    // Same seam as rename()/testPlugin() in the kernel.
+    return driver(features => bindHttp(options, bundleTokens, needs, features));
+}
+function bindHttp(options, bundleTokens, needs, features) {
     const state = { tracked: undefined, handle: undefined };
     const gauge = { count: 0, waiters: [] };
-    const inner = plugin({
+    return plugin({
         name: 'http',
         version: '0.0.1',
         // Compile-time/runtime seam: the precise needs shape is derived from
-        // `options.bundles` in the return-type cast below; here the runtime
+        // `options.bundles` in http()'s return-type cast; here the runtime
         // record rides in under the EmptyShape default. The kernel re-checks
         // satisfaction at boot (DOT_LIFECYCLE_E012) for erased composition.
+        // `.serve()` adds the features' slice tokens to these needs.
         needs,
         configure(ctx) {
             ctx.registerService('httpServer', 'custom');
@@ -111,6 +143,7 @@ export function http(options) {
         boot(ctx) {
             // Erasure boundary: needs were declared dynamically above, so the
             // typed hook context can't know the bundle keys — the tokens do.
+            // Bundles first, then feature routes in mount order.
             const record = ctx;
             const bundles = [];
             for (const tok of bundleTokens) {
@@ -125,19 +158,10 @@ export function http(options) {
                 }
                 bundles.push(bundle);
             }
-            for (const tok of featureTokens) {
-                const slice = record[tok.key];
-                if (slice === undefined) {
-                    throw new DotPluginError({
-                        code: HTTP_PLUGIN_ERROR_CODES.bundleMissing,
-                        message: `[http] feature "${tok.key}" was not provided by any earlier plugin.`,
-                        remediation: 'Mount the feature plugin that publishes this token before http(...). The typed builder enforces this; erased composition reaches this check.',
-                        docsUrl: 'https://arki.dev/http/errors/arki-http-e008',
-                    });
-                }
-                if (slice.routes !== undefined) {
-                    bundles.push(slice.routes);
-                }
+            for (const f of features) {
+                const routes = featureRoutes(ctx, f);
+                if (routes !== undefined)
+                    bundles.push(routes);
             }
             const engine = buildEngine(bundles);
             const composed = composeMiddleware(engine.fetch, options.middleware ?? []);
@@ -213,11 +237,6 @@ export function http(options) {
             }
         },
     });
-    // Erasure seam: `inner` is Plugin<{}, HttpServices> because the needs shape
-    // was runtime-built; the cast re-attaches the token-derived needs so the
-    // app builder's guard checks bundle provision. Same seam as rename()/
-    // testPlugin() in the kernel.
-    return inner;
 }
 /**
  * Deprecated shim for registering contracts from a feature plugin's `configure`

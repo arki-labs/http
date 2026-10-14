@@ -2,7 +2,7 @@
 
 Typed HTTP for ARKI — route contracts as data, zod-validated handlers,
 request-scope derivers, SSE streaming, and deterministic OpenAPI
-generation. Ships a DOT adapter (`@arki/http/dot`) whose `http()` plugin
+generation. Ships a DOT adapter (`@arki/http/dot`) whose `http()` driver
 turns a composed app into a running server with correct drain-on-shutdown
 semantics.
 
@@ -44,28 +44,30 @@ coded envelope: `{ "error": { "code", "message", "remediation?", "docsUrl?" } }`
 
 ## Inside a DOT app
 
+A feature declares its HTTP surface with `endpoints(build)`. The builder
+runs once at boot with the feature's typed needs:
+
 ```ts
-import { plugin, provide, service, token } from '@arki/dot/plugin';
-import { routes, type RouteBundle } from '@arki/http';
+import { feature } from '@arki/dot/feature';
+import { service } from '@arki/dot/plugin';
+import { endpoints, routes } from '@arki/http';
 
-export const OrdersRoutes = token<RouteBundle>()('orders.routes');
-
-export const ordersPlugin = plugin({
-  name: 'orders',
+export const orders = feature('orders', {
   needs: { db: service<Db>() },
   actions: [listOrders, createOrder], // manifest + OpenAPI metadata
-  async boot({ db }) {
-    return provide(
-      OrdersRoutes,
+  use: [
+    endpoints(({ db }: { readonly db: Db }) =>
       routes()
         .bind(listOrders, async ({ query }) => db.orders.list(query))
         .bind(createOrder, async ({ body }, ctx) => db.orders.create(body, ctx.requestId)),
-    );
-  },
+    ),
+  ],
 });
 ```
 
-Mount the `http()` plugin **last**, naming the bundles it serves:
+`http()` is a driving adapter: mount it with `.serve()`, after the
+features. It serves the routes of every mounted feature, in mount order —
+the app lists its features once:
 
 ```ts
 import { defineApp, hookSignals } from '@arki/dot';
@@ -73,20 +75,38 @@ import { http } from '@arki/http/dot';
 
 const app = await defineApp('shop-api')
   .use(db({ url: DATABASE_URL }))
-  .use(ordersPlugin)
-  .use(http({ port: 3000, bundles: [OrdersRoutes] }))
+  .features([orders, billing])
+  .serve(http({ port: 3000 }))
   .start();
 
 hookSignals(app);
 ```
 
-`http()` derives its `needs` from the tokens you pass — forget to mount
-`ordersPlugin` and the `.use(http(...))` line fails to typecheck. Because the
-plugin is declared last, reverse-order `stop` halts ingress FIRST: the server
-stops accepting, drains in-flight requests (`drainTimeoutMs`, default
-10 s, `ARKI_HTTP_E005` on overrun), and only then do feature plugins tear
-down. `boot` builds the router without listening; `start` listens;
-`dispose` severs remaining connections and releases the port.
+A feature with no `endpoints()` slice is skipped. Mount `http()` with
+`.serve()`, not `.use()`: under `.use()` it boots before the features, so
+their routes do not exist yet and boot fails.
+
+Route bundles published as plain token services (not by a feature) go in
+`bundles`. Each token becomes a need, so the `.serve(http(...))` line fails
+to typecheck when no earlier unit provides it. Bundles come first in the
+route table, then feature routes:
+
+```ts
+export const AdminRoutes = token<RouteBundle>()('admin.routes');
+
+defineApp('shop-api')
+  .use(adminPlugin) // boot: () => provide(AdminRoutes, routes().bind(...))
+  .features([orders])
+  .serve(http({ port: 3000, bundles: [AdminRoutes] }));
+```
+
+Because `.serve()` mounts after every feature, reverse-order `stop` halts
+ingress FIRST: the server stops accepting, drains in-flight requests
+(`drainTimeoutMs`, default 10 s, `ARKI_HTTP_E005` on overrun), and only
+then do features tear down. `boot` builds the router without listening;
+`start` listens; `dispose` severs remaining connections and releases the
+port. A feature whose `routes` slice is not a route bundle fails boot with
+`ARKI_HTTP_E010`.
 
 The published `httpServer` service carries the composed
 `fetch: (Request) => Promise<Response>` — also the unit-test seam: call

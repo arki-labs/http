@@ -1,6 +1,6 @@
 # @arki/http
 
-Published version: **0.1.0**
+Published version: **0.2.1**
 
 This repository is a **read-only mirror** of the [@arki/http](https://www.npmjs.com/package/@arki/http) npm package.
 

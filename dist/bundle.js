@@ -138,10 +138,10 @@ export function routes() {
 }
 /**
  * Declare a feature's HTTP surface as a boot-time slice
- * (`defineFeature(..., { use: [endpoints(build)] })`). The builder runs
+ * (`feature(..., { use: [endpoints(build)] })`). The builder runs
  * once at boot with the feature's needed services; the bundle lands
- * under `routes` in the feature's slice token — where
- * `http({ features })` collects it. Route contracts stay in the
+ * under `routes` in the feature's slice record — where the
+ * `.serve(http(...))` driver collects it. Route contracts stay in the
  * feature's `actions` list.
  */
 export function endpoints(build) {

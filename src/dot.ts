@@ -1,10 +1,10 @@
 /**
- * DOT adapter for `@arki/http` — the `http()` plugin.
+ * DOT adapter for `@arki/http` — the `http()` driving adapter.
  *
- * Mount it LAST. Feature plugins publish {@link RouteBundle}s as token
- * services in their `boot`; `http()` derives its `needs` from the tokens
- * you pass, so the app builder's wiring guard enforces — at compile time —
- * that every listed bundle is provided by an earlier plugin:
+ * `http()` is a driver: `.serve(http(...))` binds it to the features the
+ * app mounted, and it serves every feature's `routes` slice (declared with
+ * `endpoints(...)` in the feature's `use` list). The app never lists its
+ * features twice:
  *
  * ```ts
  * import { defineApp } from '@arki/dot';
@@ -12,20 +12,26 @@
  *
  * const app = await defineApp('shop-api')
  *   .use(db({ url }))
- *   .use(ordersPlugin)          // publishes OrdersRoutes
- *   .use(billingPlugin)         // publishes BillingRoutes
- *   .use(http({ port: 3000, bundles: [OrdersRoutes, BillingRoutes] }))
+ *   .features([orders, billing])   // each declares `use: [endpoints(build)]`
+ *   .serve(http({ port: 3000 }))
  *   .start();
  * ```
  *
- * Lifecycle mapping — mounting last is what makes the drain order right:
+ * Route bundles published as plain token services (not features) are
+ * listed in `bundles`. Each becomes a need, so the builder's wiring guard
+ * rejects the app at compile time unless an earlier unit provides it.
+ * Bundle routes come first in the route table, then feature routes in
+ * mount order.
+ *
+ * Lifecycle mapping — `.serve()` mounts after every feature, which is what
+ * makes the drain order right:
  *
  *  - `boot`    — collect bundles, build the router, publish `httpServer`.
  *                NOT listening yet; all feature boots finish first.
  *  - `start`   — listen (first among starts — the route table is final).
  *  - `stop`    — stop accepting, drain in-flight handlers
  *                (`drainTimeoutMs`). Reverse order puts this FIRST:
- *                ingress stops before feature plugins tear down.
+ *                ingress stops before features tear down.
  *  - `dispose` — sever remaining connections (open SSE streams end here)
  *                and release the port.
  *
@@ -34,8 +40,10 @@
  * adapter only makes sense inside a DOT app.
  */
 
+import type { AnyFeature, Driver } from '@arki/dot/feature';
 import type { DotConfigureContext, EmptyShape, Plugin, Token } from '@arki/dot/plugin';
 import type { Lazy } from '@arki/ts';
+import { driver, sliceOf } from '@arki/dot/feature';
 import { DotPluginError, plugin } from '@arki/dot/plugin';
 import { resolveLazy } from '@arki/ts';
 
@@ -49,7 +57,6 @@ import { listen } from './listen.js';
 
 /** A token publishing a {@link RouteBundle} — what `options.bundles` lists. */
 export type BundleToken = Token<RouteBundle, string>;
-export type HttpFeatureToken = Token<object, string>;
 
 /**
  * The service the `http()` plugin publishes. `fetch` is the composed handler
@@ -69,32 +76,25 @@ export type HttpServices = {
   readonly httpServer: HttpServer;
 };
 
-export type HttpOptions<
-  TBundles extends readonly BundleToken[] = readonly [],
-  TFeatures extends readonly HttpFeatureToken[] = readonly [],
-> = {
+export type HttpOptions<TBundles extends readonly BundleToken[] = readonly []> = {
   /**
    * Port to listen on in `start`. `0` picks an ephemeral port. Pass a
    * THUNK to defer the read to `start` — declarations stay import-pure
    * (no env observation at module load), e.g. `http({ port: () => env.PORT })`.
    *
    * Unlike `kv()`, the whole options object cannot be thunked here:
-   * `bundles`/`features` are declaration-time wiring (they shape the
-   * plugin's needs), so only runtime settings like `port` defer.
+   * `bundles` is declaration-time wiring (it shapes the adapter's needs),
+   * so only runtime settings like `port` defer.
    */
   readonly port: Lazy<number>;
   readonly hostname?: string;
   /**
-   * Bundle tokens to serve, in route-table order. Each becomes a `needs`
-   * entry — the wiring guard rejects the composition unless an earlier
-   * plugin publishes it.
+   * Bundle tokens to serve, in route-table order, ahead of the features'
+   * routes. For bundles published as plain token services, not by a
+   * feature. Each becomes a `needs` entry — the wiring guard rejects the
+   * composition unless an earlier unit publishes it.
    */
   readonly bundles?: TBundles;
-  /**
-   * Feature tokens that may publish an HTTP `routes` slice. Missing slices
-   * are treated as empty so partial backend features stay zero-config.
-   */
-  readonly features?: TFeatures;
   /**
    * App-wide fetch-shaped middleware (first = outermost): CORS, request
    * logging, compression. For per-request values use bundle derivers —
@@ -110,25 +110,15 @@ export type BundleNeeds<TBundles extends readonly BundleToken[]> = {
   readonly [Tok in TBundles[number] as Tok extends Token<RouteBundle, infer K> ? K : never]: RouteBundle;
 };
 
-export type HttpFeatureNeeds<TFeatures extends readonly HttpFeatureToken[]> = {
-  // Value = the token's OWN payload type: the kernel guard then checks
-  // exactly what the feature plugin provides. A payload without `routes`
-  // simply contributes nothing at collection time.
-  readonly [Tok in TFeatures[number] as Tok extends Token<unknown, infer K> ? K : never]: Tok extends Token<
-    infer TPayload,
-    string
-  >
-    ? TPayload
-    : never;
-};
-
 /**
  * Stable error codes thrown by the http plugin beyond the engine's own.
  * Exported so consumers and coding agents can match against them.
  */
 export const HTTP_PLUGIN_ERROR_CODES = {
-  /** A bundle or feature token's service was missing from the boot context (erased composition only). */
+  /** A bundle token's service was missing from the boot context (erased composition only). */
   bundleMissing: 'ARKI_HTTP_E008',
+  /** A feature's `routes` slice is not a route bundle (hand-minted slice, not `endpoints()`). */
+  routesSliceInvalid: 'ARKI_HTTP_E010',
 } as const;
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 10_000;
@@ -160,23 +150,48 @@ function drained(gauge: InflightGauge, timeoutMs: number): Promise<void> {
   });
 }
 
+function isRouteBundle(value: unknown): value is RouteBundle {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'derivers' in value &&
+    Array.isArray(value.derivers) &&
+    'bindings' in value &&
+    Array.isArray(value.bindings) &&
+    'mounts' in value &&
+    Array.isArray(value.mounts)
+  );
+}
+
+/** The `routes` slice of one mounted feature, or `undefined` when it declares none. */
+function featureRoutes(ctx: object, f: AnyFeature): RouteBundle | undefined {
+  const routes = sliceOf(ctx, f)['routes'];
+  if (routes === undefined) return undefined;
+  if (!isRouteBundle(routes)) {
+    throw new DotPluginError({
+      code: HTTP_PLUGIN_ERROR_CODES.routesSliceInvalid,
+      message: `[http] feature "${f.name}" published a "routes" slice that is not a route bundle.`,
+      remediation: 'Declare the feature\'s HTTP surface with endpoints(build) from @arki/http, where build returns routes()….',
+      docsUrl: 'https://arki.dev/http/errors/arki-http-e010',
+    });
+  }
+  return routes;
+}
+
 function displayHost(hostname: string): string {
   return hostname === '0.0.0.0' || hostname === '::' ? 'localhost' : hostname;
 }
 
 /**
- * Build the DOT plugin that serves the given bundles. See the module docs
- * for the composition pattern and lifecycle mapping.
+ * The HTTP driving adapter. `.serve(http(...))` binds it to the app's
+ * features; it serves the listed bundles plus every feature's `routes`
+ * slice. See the module docs for the composition pattern and lifecycle.
  */
-export function http<
-  const TBundles extends readonly BundleToken[] = readonly [],
-  const TFeatures extends readonly HttpFeatureToken[] = readonly [],
->(
-  options: HttpOptions<TBundles, TFeatures>,
-): Plugin<BundleNeeds<TBundles> & HttpFeatureNeeds<TFeatures>, HttpServices> {
-  const bundleTokens = options.bundles ?? ([] as unknown as TBundles);
-  const featureTokens = options.features ?? ([] as unknown as TFeatures);
-  const needs: Record<string, BundleToken | HttpFeatureToken> = {};
+export function http<const TBundles extends readonly BundleToken[] = readonly []>(
+  options: HttpOptions<TBundles>,
+): Driver<BundleNeeds<TBundles>, HttpServices> {
+  const bundleTokens: readonly BundleToken[] = options.bundles ?? [];
+  const needs: Record<string, BundleToken> = {};
   for (const tok of bundleTokens) {
     if (needs[tok.key] !== undefined) {
       throw new HttpConfigError({
@@ -187,27 +202,34 @@ export function http<
     }
     needs[tok.key] = tok;
   }
-  for (const tok of featureTokens) {
-    if (needs[tok.key] !== undefined) {
-      throw new HttpConfigError({
-        code: HTTP_ERROR_CODES.duplicateRoute,
-        message: `[http] feature token "${tok.key}" is listed twice in options.features or duplicates a bundle token.`,
-        remediation: 'List each feature token once. To mount one feature twice, rename the publishing plugin.',
-      });
-    }
-    needs[tok.key] = tok;
-  }
 
+  // Erasure seam: the bound plugin is Plugin<{}, HttpServices> because its
+  // needs record is runtime-built; the cast re-attaches the token-derived
+  // needs so the builder's guard checks bundle provision at `.serve()`.
+  // Same seam as rename()/testPlugin() in the kernel.
+  return driver(
+    features =>
+      bindHttp(options, bundleTokens, needs, features) as unknown as Plugin<BundleNeeds<TBundles>, HttpServices>,
+  );
+}
+
+function bindHttp(
+  options: HttpOptions<readonly BundleToken[]>,
+  bundleTokens: readonly BundleToken[],
+  needs: Record<string, BundleToken>,
+  features: readonly AnyFeature[],
+): Plugin<EmptyShape, HttpServices> {
   const state: PluginState = { tracked: undefined, handle: undefined };
   const gauge: InflightGauge = { count: 0, waiters: [] };
 
-  const inner = plugin<EmptyShape, HttpServices>({
+  return plugin<EmptyShape, HttpServices>({
     name: 'http',
     version: '0.0.1',
     // Compile-time/runtime seam: the precise needs shape is derived from
-    // `options.bundles` in the return-type cast below; here the runtime
+    // `options.bundles` in http()'s return-type cast; here the runtime
     // record rides in under the EmptyShape default. The kernel re-checks
     // satisfaction at boot (DOT_LIFECYCLE_E012) for erased composition.
+    // `.serve()` adds the features' slice tokens to these needs.
     needs,
     configure(ctx) {
       ctx.registerService('httpServer', 'custom');
@@ -216,6 +238,7 @@ export function http<
     boot(ctx) {
       // Erasure boundary: needs were declared dynamically above, so the
       // typed hook context can't know the bundle keys — the tokens do.
+      // Bundles first, then feature routes in mount order.
       const record = ctx as unknown as Readonly<Record<string, RouteBundle | undefined>>;
       const bundles: RouteBundle[] = [];
       for (const tok of bundleTokens) {
@@ -231,20 +254,9 @@ export function http<
         }
         bundles.push(bundle);
       }
-      for (const tok of featureTokens) {
-        const slice = record[tok.key] as { readonly routes?: RouteBundle } | undefined;
-        if (slice === undefined) {
-          throw new DotPluginError({
-            code: HTTP_PLUGIN_ERROR_CODES.bundleMissing,
-            message: `[http] feature "${tok.key}" was not provided by any earlier plugin.`,
-            remediation:
-              'Mount the feature plugin that publishes this token before http(...). The typed builder enforces this; erased composition reaches this check.',
-            docsUrl: 'https://arki.dev/http/errors/arki-http-e008',
-          });
-        }
-        if (slice.routes !== undefined) {
-          bundles.push(slice.routes);
-        }
+      for (const f of features) {
+        const routes = featureRoutes(ctx, f);
+        if (routes !== undefined) bundles.push(routes);
       }
 
       const engine = buildEngine(bundles);
@@ -320,11 +332,6 @@ export function http<
     },
   });
 
-  // Erasure seam: `inner` is Plugin<{}, HttpServices> because the needs shape
-  // was runtime-built; the cast re-attaches the token-derived needs so the
-  // app builder's guard checks bundle provision. Same seam as rename()/
-  // testPlugin() in the kernel.
-  return inner as unknown as Plugin<BundleNeeds<TBundles> & HttpFeatureNeeds<TFeatures>, HttpServices>;
 }
 
 /**
