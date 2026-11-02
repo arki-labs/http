@@ -1,8 +1,8 @@
 /**
  * The socket layer — runtime-adaptive listening.
  *
- * `Bun.serve` when the Bun global is present, `@hono/node-server`
- * otherwise. Neither runtime's types leak into the public surface; the
+ * `Bun.serve` when the Bun global is present (with the engine's native
+ * route table, when it has one), `@hono/node-server` otherwise. Neither runtime's types leak into the public surface; the
  * handle exposes exactly what the `http()` plugin's lifecycle needs.
  */
 import { HTTP_ERROR_CODES, HttpConfigError } from './error.js';
@@ -17,18 +17,26 @@ function listenFailure(port, cause) {
         remediation: 'Is the port already in use? Change options.port on http(...) or stop the other process.',
     });
 }
-export async function listen(fetch, options) {
+/**
+ * Serve an engine, or a bare fetch handler. Under Bun an engine's
+ * `bunRoutes` go to `Bun.serve({ routes })`, so those routes are matched
+ * natively; everything else reaches `fetch`.
+ */
+export async function listen(target, options) {
+    const fetch = typeof target === 'function' ? target : target.fetch;
+    const routes = typeof target === 'function' ? undefined : target.bunRoutes;
     const bun = bunGlobal();
     if (bun !== undefined)
-        return listenBun(bun, fetch, options);
+        return listenBun(bun, fetch, routes, options);
     return listenNode(fetch, options);
 }
-function listenBun(bun, fetch, options) {
+function listenBun(bun, fetch, routes, options) {
     let server;
     try {
         server = bun.serve({
             port: options.port,
             fetch,
+            ...(routes === undefined ? {} : { routes }),
             ...(options.hostname === undefined ? {} : { hostname: options.hostname }),
         });
     }

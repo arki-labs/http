@@ -1,0 +1,452 @@
+[
+  {
+    "code": "ARKI_HTTP_E001",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "`start` could not bind the port.",
+    "fix": "Free the port, or pass another `port`. The error `cause` names the system error.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:40"
+  },
+  {
+    "code": "ARKI_HTTP_E002",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "Two bindings claim the same method and path, or a bundle token is listed twice.",
+    "fix": "Remove one binding. Each method and path is bound once.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:47"
+  },
+  {
+    "code": "ARKI_HTTP_E005",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "`stop` exceeded `drainTimeoutMs` with requests still in flight.",
+    "fix": "Raise `drainTimeoutMs`, or shorten the slow handlers. Check that handlers honour the abort signal.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:54"
+  },
+  {
+    "code": "ARKI_HTTP_E006",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A mount path is malformed.",
+    "fix": "Use a path that starts with `/` and has no query or fragment.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:61"
+  },
+  {
+    "code": "ARKI_HTTP_E008",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A bundle token service was missing from the boot context (erased composition only).",
+    "fix": "Provide the service in the plugin that the route bundle needs.",
+    "verify": "bun run test -- src/tests/bundle.test.ts",
+    "source": "src/dot.ts:173"
+  },
+  {
+    "code": "ARKI_HTTP_E009",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A Dot HTTP action carries missing or incompatible projection metadata.",
+    "fix": "Build the action with the route helpers, not by hand, so its metadata is complete.",
+    "verify": "bun run test -- src/tests/dot.test.ts",
+    "source": "src/error.ts:75"
+  },
+  {
+    "code": "ARKI_HTTP_E010",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A feature `routes` slice is not a route bundle (a hand-made slice, not `endpoints()`).",
+    "fix": "Build the slice with `endpoints()`.",
+    "verify": "bun run test -- src/tests/dot.test.ts",
+    "source": "src/dot.ts:180"
+  },
+  {
+    "code": "ARKI_HTTP_E011",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A route contract is inconsistent: params, headers or responses do not fit its path or each other. Thrown at declaration.",
+    "fix": "Make the params schema match the `:name` segments of the path, and declare each response status once.",
+    "verify": "bun run test -- src/tests/contract.test.ts",
+    "source": "src/error.ts:82"
+  },
+  {
+    "code": "ARKI_HTTP_E012",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A webhook scheme has no secrets, an empty secret, or a secret it cannot decode. Thrown when the scheme is created.",
+    "fix": "Pass at least one non-empty secret in the format the scheme expects.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/error.ts:89"
+  },
+  {
+    "code": "ARKI_HTTP_E013",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A contract schema cannot describe itself as JSON Schema (OpenAPI, manifest). Thrown by `contractMeta` and `toOpenApi`.",
+    "fix": "Wrap the schema with `withJsonSchema`, or use a schema library that supports Standard JSON Schema.",
+    "verify": "bun run test -- src/tests/openapi.test.ts",
+    "source": "src/error.ts:96"
+  },
+  {
+    "code": "ARKI_HTTP_E014",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "`requestContext()` was called, but every engine in this process was built without `requestContext: true`.",
+    "fix": "Pass `{ requestContext: true }` to `buildEngine` or `buildHonoEngine` (or `requestContext: true` to `http()`), or read the explicit `ctx` instead.",
+    "verify": "bun run test -- src/tests/context.test.ts",
+    "source": "src/error.ts:68"
+  },
+  {
+    "code": "ARKI_HTTP_E400",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "Request validation failed (params, headers, query or body), or the body is not valid JSON. Answers 400.",
+    "fix": "Send a request that matches the contract. The error `issues` list each failing field.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:103"
+  },
+  {
+    "code": "ARKI_HTTP_E401",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A step rejected the request credentials.",
+    "fix": "Send valid credentials.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:166"
+  },
+  {
+    "code": "ARKI_HTTP_E403",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A step rejected the request permissions.",
+    "fix": "Use an account that has the permission.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:173"
+  },
+  {
+    "code": "ARKI_HTTP_E404",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "No route matches the request. Answers 404.",
+    "fix": "Check the method and path against the contract.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:180"
+  },
+  {
+    "code": "ARKI_HTTP_E408",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A client call ran past its `timeoutMs`. Thrown by `@arki/http/client`; never sent on the wire.",
+    "fix": "Raise `timeoutMs`, or retry. Retries are safe only for idempotent calls.",
+    "verify": "bun run test -- src/tests/client-retry.test.ts",
+    "source": "src/error.ts:138"
+  },
+  {
+    "code": "ARKI_HTTP_E410",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A route that needs an idempotency key got none, or an unusable one. Answers 400.",
+    "fix": "Send an `Idempotency-Key` header with a unique value per logical action.",
+    "verify": "bun run test -- src/tests/idempotency.test.ts",
+    "source": "src/error.ts:110"
+  },
+  {
+    "code": "ARKI_HTTP_E411",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "An idempotency key was reused with a different method, path, query or body. Answers 422.",
+    "fix": "Use a new key for a new request. Reuse a key only to repeat the same request.",
+    "verify": "bun run test -- src/tests/idempotency.test.ts",
+    "source": "src/error.ts:117"
+  },
+  {
+    "code": "ARKI_HTTP_E412",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A request with this idempotency key is still running. Answers 409 with `retry-after`.",
+    "fix": "Wait for `retry-after` seconds, then send the same request with the same key.",
+    "verify": "bun run test -- src/tests/idempotency.test.ts",
+    "source": "src/error.ts:124"
+  },
+  {
+    "code": "ARKI_HTTP_E413",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A request body is larger than the route allows. Answers 413.",
+    "fix": "Send a smaller body, or raise the body limit of the webhook scheme or route.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:131"
+  },
+  {
+    "code": "ARKI_HTTP_E420",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A webhook signature header is missing or malformed. Answers 401.",
+    "fix": "Send the signature headers the scheme expects.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/error.ts:145"
+  },
+  {
+    "code": "ARKI_HTTP_E421",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "No webhook signature matches the body with any of the secrets. Answers 401.",
+    "fix": "Check the secret, and that the body reaches the handler unchanged.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/error.ts:152"
+  },
+  {
+    "code": "ARKI_HTTP_E422",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A webhook signed time is too far from now: a replay, or a clock far off. Answers 401.",
+    "fix": "Fix the sender or server clock, or widen the time window.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/error.ts:159"
+  },
+  {
+    "code": "ARKI_HTTP_E500",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "Handler crash or output-schema violation. Answers 500.",
+    "fix": "Read the server log. Fix the handler, or make its output match the contract.",
+    "verify": "bun run test -- src/tests/engine.test.ts",
+    "source": "src/error.ts:187"
+  },
+  {
+    "code": "ARKI_HTTP_E510",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A handler returned a `Response` without `output: raw()`, or a value from a `raw()` route. Answers 500.",
+    "fix": "Declare `output: raw()` for a handler that returns a `Response`, and return a `Response` from it.",
+    "verify": "bun run test -- src/tests/failures.test.ts",
+    "source": "src/error.ts:194"
+  },
+  {
+    "code": "ARKI_HTTP_E511",
+    "package": "@arki/http",
+    "kind": "thrown",
+    "what": "A handler result does not fit its contract: undeclared status, malformed `reply`, or a value on a no-output route. Answers 500.",
+    "fix": "Return only the statuses the contract declares.",
+    "verify": "bun run test -- src/tests/failures.test.ts",
+    "source": "src/error.ts:201"
+  },
+  {
+    "code": "http.idempotency_claim_unconfirmed",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Cache acquisition did not confirm whether this request owns the key.",
+    "fix": "Retry the same key; never execute without confirmed ownership.",
+    "verify": "bun run test -- src/tests/idempotency-outcomes.test.ts",
+    "source": "src/failures.ts:69"
+  },
+  {
+    "code": "http.idempotency_hash_unavailable",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The runtime cannot securely fingerprint a protected request.",
+    "fix": "Provide Web Crypto SHA-256 before retrying the same request.",
+    "verify": "bun run test -- src/tests/idempotency-preparation.test.ts",
+    "source": "src/failures.ts:142"
+  },
+  {
+    "code": "http.idempotency_in_progress",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The original protected write is still running.",
+    "fix": "Wait for Retry-After before retrying the same request.",
+    "verify": "bun run test -- src/tests/boundary-outcomes.test.ts src/tests/idempotency.test.ts",
+    "source": "src/failures.ts:59"
+  },
+  {
+    "code": "http.idempotency_key_required",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "A protected write has no valid idempotency key.",
+    "fix": "Supply one key per logical request.",
+    "verify": "bun run test -- src/tests/boundary-outcomes.test.ts src/tests/idempotency.test.ts",
+    "source": "src/failures.ts:41"
+  },
+  {
+    "code": "http.idempotency_key_reused",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The key identifies a different request.",
+    "fix": "Use a new key for the different request.",
+    "verify": "bun run test -- src/tests/boundary-outcomes.test.ts src/tests/idempotency.test.ts",
+    "source": "src/failures.ts:50"
+  },
+  {
+    "code": "http.idempotency_ownership_lost",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The expected owner cannot persist a response.",
+    "fix": "Reconcile the operation; never treat lost ownership as permission to repeat it.",
+    "verify": "bun run test -- src/tests/idempotency-outcomes.test.ts",
+    "source": "src/failures.ts:96"
+  },
+  {
+    "code": "http.idempotency_release_unconfirmed",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Release of a reconciled reservation was not confirmed.",
+    "fix": "Check the reservation before executing or releasing again.",
+    "verify": "bun run test -- src/tests/idempotency-outcomes.test.ts",
+    "source": "src/failures.ts:87"
+  },
+  {
+    "code": "http.idempotency_replay_invalid",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Persisted replay data cannot be safely reconstructed.",
+    "fix": "Repair the stored response after reconciling the application outcome.",
+    "verify": "bun run test -- src/tests/idempotency-outcomes.test.ts",
+    "source": "src/failures.ts:105"
+  },
+  {
+    "code": "http.idempotency_request_too_large",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The request cannot be fingerprinted within the configured bound.",
+    "fix": "Reduce the body size or raise the configured limit.",
+    "verify": "bun run test -- src/tests/idempotency.test.ts",
+    "source": "src/failures.ts:123"
+  },
+  {
+    "code": "http.idempotency_request_unreadable",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Request bytes could not be read before idempotency ownership or application work.",
+    "fix": "Send a fresh request with a readable body.",
+    "verify": "bun run test -- src/tests/idempotency-preparation.test.ts",
+    "source": "src/failures.ts:133"
+  },
+  {
+    "code": "http.idempotency_response_unavailable",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Application work ran but its response cannot be stored for replay.",
+    "fix": "Use a bounded, nonstreaming response and reconcile this operation.",
+    "verify": "bun run test -- src/tests/idempotency-outcomes.test.ts",
+    "source": "src/failures.ts:114"
+  },
+  {
+    "code": "http.idempotency_write_unconfirmed",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Application work ran but persistence of its response is unconfirmed.",
+    "fix": "Reconcile the application outcome before releasing or replacing its key.",
+    "verify": "bun run test -- src/tests/idempotency-outcomes.test.ts",
+    "source": "src/failures.ts:78"
+  },
+  {
+    "code": "http.network_failure",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "A fetch attempt failed to reach its destination.",
+    "fix": "Check connectivity and retry only repeatable requests.",
+    "verify": "bun run test -- src/tests/boundary-outcomes.test.ts src/tests/idempotency.test.ts",
+    "source": "src/failures.ts:15"
+  },
+  {
+    "code": "http.redirect_limit",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "A public fetch followed more redirects than it allows (five).",
+    "fix": "Fetch the final URL directly, or fix the redirect loop at the server.",
+    "verify": "bun run test -- src/tests/public-fetch.test.ts",
+    "source": "src/failures.ts:171"
+  },
+  {
+    "code": "http.request_cancelled",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The caller cancelled the request.",
+    "fix": "Start a new request if the result is still needed.",
+    "verify": "bun run test -- src/tests/boundary-outcomes.test.ts src/tests/idempotency.test.ts",
+    "source": "src/failures.ts:33"
+  },
+  {
+    "code": "http.request_timeout",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The request did not receive a response before its deadline.",
+    "fix": "Retry only repeatable requests or increase the deadline.",
+    "verify": "bun run test -- src/tests/boundary-outcomes.test.ts src/tests/idempotency.test.ts",
+    "source": "src/failures.ts:24"
+  },
+  {
+    "code": "http.response_too_large",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "A public fetch response body was larger than `maxBytes`.",
+    "fix": "Raise `maxBytes` or fetch a smaller resource.",
+    "verify": "bun run test -- src/tests/public-fetch.test.ts",
+    "source": "src/failures.ts:180"
+  },
+  {
+    "code": "http.unsafe_url",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "`@arki/http/public-fetch` refused a URL: a bad scheme, refused credentials, or a private, loopback or link-local address (also after DNS or a redirect). The message never carries the URL.",
+    "fix": "Call only public `http` or `https` hosts. Do not follow redirects to internal addresses. A refused URL is refused every time: do not retry it.",
+    "verify": "bun run test -- src/tests/public-fetch.test.ts",
+    "source": "src/failures.ts:160"
+  },
+  {
+    "code": "http.webhook_body_too_large",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The webhook body exceeds the configured limit.",
+    "fix": "Send a smaller body or increase the configured webhook body limit.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/webhook-failures.ts:40"
+  },
+  {
+    "code": "http.webhook_body_unreadable",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The webhook request body could not be read.",
+    "fix": "Send a fresh request with a readable body.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/webhook-failures.ts:50"
+  },
+  {
+    "code": "http.webhook_crypto_unavailable",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Required Web Crypto operations are unavailable.",
+    "fix": "Provide Web Crypto HMAC and SHA-256 before retrying.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/webhook-failures.ts:60"
+  },
+  {
+    "code": "http.webhook_malformed",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "Required webhook signature headers or signed time are malformed.",
+    "fix": "Send the signature headers and timestamp required by the configured scheme.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/webhook-failures.ts:10"
+  },
+  {
+    "code": "http.webhook_signature_mismatch",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "No webhook signature authenticates the supplied body.",
+    "fix": "Check the sender secret, scheme and original request bytes.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/webhook-failures.ts:20"
+  },
+  {
+    "code": "http.webhook_stale",
+    "package": "@arki/http",
+    "kind": "failure",
+    "what": "The authenticated webhook time is outside the allowed window.",
+    "fix": "Check both clocks and request a fresh signed delivery.",
+    "verify": "bun run test -- src/tests/webhooks.test.ts",
+    "source": "src/webhook-failures.ts:30"
+  }
+]

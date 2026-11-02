@@ -1,7 +1,7 @@
 /**
  * OpenAPI generation — falls out of the contracts, doesn't bolt on.
  *
- * Contracts are static data carrying zod schemas, so the document is
+ * Contracts are static data carrying Standard Schemas, so the document is
  * produced without booting anything, deterministically: same contracts in
  * the same order → byte-identical output (DOT principle 3). No decorator
  * reconstruction, no annotations — the schema IS the validation IS the
@@ -57,7 +57,8 @@ export type RouteMeta = {
  * Manifest metadata for a contract — what contract `toDotAction()` returns
  * for DOT plugins and what `registerRoutes` feeds into `ctx.registerAction`
  * during the shim window. SSE contracts mark `streaming` and carry the
- * per-event schema as `output`.
+ * per-event schema as `output`. A `raw()` route carries `raw` instead of
+ * `output`, and `responses` holds one JSON Schema per declared status.
  */
 export declare function contractMeta(contract: ContractLike): RouteMeta;
 export declare function toOpenApiFromManifest(manifest: DotManifestLike): JsonObject;

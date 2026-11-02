@@ -1,19 +1,19 @@
 /**
- * DOT adapter for `@arki/http` — the `http()` driving adapter.
+ * DOT adapter for `@arki/http` — the `http()` entrypoint.
  *
- * `http()` is a driver: `.serve(http(...))` binds it to the features the
- * app mounted, and it serves every feature's `routes` slice (declared with
- * `endpoints(...)` in the feature's `use` list). The app never lists its
- * features twice:
+ * `http()` is an entrypoint: `.entrypoints(http(...))` binds it to the features the
+ * app mounted, and it serves every feature's `routes` slice — declared with
+ * `endpoints(core, build)` from this module in a `defineFeature` feature's
+ * `.entrypoints(...)`. The app never lists its features twice:
  *
  * ```ts
  * import { defineApp } from '@arki/dot';
  * import { http } from '@arki/http/dot';
  *
  * const app = await defineApp('shop-api')
- *   .use(db({ url }))
- *   .features([orders, billing])   // each declares `use: [endpoints(build)]`
- *   .serve(http({ port: 3000 }))
+ *   .infra(db({ url }))
+ *   .features([orders, billing])   // each lists `endpoints(core, build)` in `.entrypoints(...)`
+ *   .entrypoints(http({ port: 3000 }))
  *   .start();
  * ```
  *
@@ -23,10 +23,10 @@
  * Bundle routes come first in the route table, then feature routes in
  * mount order.
  *
- * Lifecycle mapping — `.serve()` mounts after every feature, which is what
+ * Lifecycle mapping — `.entrypoints()` mounts after every feature, which is what
  * makes the drain order right:
  *
- *  - `boot`    — collect bundles, build the router, publish `httpServer`.
+ *  - `provides.httpServer` — collect bundles, build the router, publish `httpServer`.
  *                NOT listening yet; all feature boots finish first.
  *  - `start`   — listen (first among starts — the route table is final).
  *  - `stop`    — stop accepting, drain in-flight handlers
@@ -39,9 +39,8 @@
  * without `@arki/dot` installed fails at module load — intentional: the
  * adapter only makes sense inside a DOT app.
  */
-import type { Driver } from '@arki/dot/feature';
-import type { DotConfigureContext, Token } from '@arki/dot/plugin';
-import type { Lazy } from '@arki/ts';
+import type { AnyFeatureCore, EntrypointBinder, EntrypointServicesOf } from '@arki/dot/feature';
+import type { Deferred, DotConfigureContext, Token } from '@arki/dot/unit';
 import type { RouteBundle } from './bundle.js';
 import type { ContractLike } from './contract.js';
 import type { HttpMiddleware } from './engine.js';
@@ -73,7 +72,7 @@ export type HttpOptions<TBundles extends readonly BundleToken[] = readonly []> =
      * `bundles` is declaration-time wiring (it shapes the adapter's needs),
      * so only runtime settings like `port` defer.
      */
-    readonly port: Lazy<number>;
+    readonly port: Deferred<number>;
     readonly hostname?: string;
     /**
      * Bundle tokens to serve, in route-table order, ahead of the features'
@@ -84,12 +83,25 @@ export type HttpOptions<TBundles extends readonly BundleToken[] = readonly []> =
     readonly bundles?: TBundles;
     /**
      * App-wide fetch-shaped middleware (first = outermost): CORS, request
-     * logging, compression. For per-request values use bundle derivers —
+     * logging, compression. For per-request values use bundle steps —
      * they are typed into handler contexts; middleware is not.
      */
     readonly middleware?: readonly HttpMiddleware[];
+    /**
+     * Run every request inside the ambient store so `requestContext()`
+     * (`@arki/http/context`) works. Off by default; it costs every request.
+     */
+    readonly requestContext?: boolean;
     /** Milliseconds `stop` waits for in-flight requests. Default 10 000. */
     readonly drainTimeoutMs?: number;
+    /**
+     * Where a feature INSTANCE's routes live (`feature.instance('eu', …)`):
+     * `(instance, path)` maps a route, mount or rpc path written once in the
+     * feature to the path served for that copy. Default puts the copy under
+     * `/<instance>` (`GET /reports` -> `GET /eu/reports`; `/` -> `/eu`).
+     * Plain features are never rewritten.
+     */
+    readonly instancePath?: (instance: string, path: string) => string;
 };
 /** Wire-needs record derived from the bundle tokens. */
 export type BundleNeeds<TBundles extends readonly BundleToken[]> = {
@@ -100,21 +112,59 @@ export type BundleNeeds<TBundles extends readonly BundleToken[]> = {
  * Exported so consumers and coding agents can match against them.
  */
 export declare const HTTP_PLUGIN_ERROR_CODES: {
-    /** A bundle token's service was missing from the boot context (erased composition only). */
+    /**
+     * A bundle token service was missing from the boot context (erased composition only).
+     *
+     * @fix Provide the service in the plugin that the route bundle needs.
+     * @verify bun run test -- src/tests/bundle.test.ts
+     */
     readonly bundleMissing: 'ARKI_HTTP_E008';
-    /** A feature's `routes` slice is not a route bundle (hand-minted slice, not `endpoints()`). */
+    /**
+     * A feature `routes` slice is not a route bundle (a hand-made slice, not `endpoints()`).
+     *
+     * @fix Build the slice with `endpoints()`.
+     * @verify bun run test -- src/tests/dot.test.ts
+     */
     readonly routesSliceInvalid: 'ARKI_HTTP_E010';
 };
+/** What `endpoints(core, build)` hands `.entrypoints(...)`: the feature's route bundle, built at its boot. */
+export type EndpointsEntrypoint<TServices> = {
+    readonly kind: 'routes';
+    readonly key: 'routes';
+    /** The route contracts, for the manifest and `dot explain` — known before anything boots. */
+    readonly actions: readonly ContractLike[];
+    readonly resolve: (services: TServices) => RouteBundle;
+};
 /**
- * The HTTP driving adapter. `.serve(http(...))` binds it to the app's
+ * Declare a `defineFeature` feature's HTTP surface, in its `.entrypoints(...)`.
+ * `build` runs once, at the feature's boot, with what every entrypoint gets —
+ * the feature's `usecases` and its `entrypointOnly(...)` needs — typed from the
+ * core at any stage, so a routes file of its own needs no annotation:
+ *
+ * ```ts
+ * // entrypoints/routes.ts — `import type { core }` only
+ * export const orderRoutes = (c: typeof core) =>
+ *   endpoints(c, ({ usecases }) => routes().bind(listOrders, () => usecases.list()), { contracts: [listOrders] });
+ * ```
+ *
+ * `contracts` are the route contracts the bundle binds; they join the
+ * manifest as the feature's actions (a chain feature has no `actions` list
+ * of its own). The `.entrypoints(http(...))` entrypoint collects the bundle under
+ * `routes`.
+ */
+export declare function endpoints<C extends AnyFeatureCore>(_core: C, build: (services: EntrypointServicesOf<C>) => RouteBundle, options?: {
+    readonly contracts?: readonly ContractLike[];
+}): EndpointsEntrypoint<EntrypointServicesOf<C>>;
+/**
+ * The HTTP entrypoint. `.entrypoints(http(...))` binds it to the app's
  * features; it serves the listed bundles plus every feature's `routes`
  * slice. See the module docs for the composition pattern and lifecycle.
  */
-export declare function http<const TBundles extends readonly BundleToken[] = readonly []>(options: HttpOptions<TBundles>): Driver<BundleNeeds<TBundles>, HttpServices>;
+export declare function http<const TBundles extends readonly BundleToken[] = readonly []>(options: HttpOptions<TBundles>): EntrypointBinder<BundleNeeds<TBundles>, HttpServices>;
 /**
  * Deprecated shim for registering contracts from a feature plugin's `configure`
  * hook. Prefer declaring contracts directly in `actions: [...]` on the plugin.
- * Converts zod schemas to JSON Schema once, at configure time, so
+ * Converts contract schemas to JSON Schema once, at configure time, so
  * `dot explain --as openapi` renders without booting:
  *
  * ```ts

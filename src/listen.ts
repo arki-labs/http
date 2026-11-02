@@ -1,11 +1,12 @@
 /**
  * The socket layer — runtime-adaptive listening.
  *
- * `Bun.serve` when the Bun global is present, `@hono/node-server`
- * otherwise. Neither runtime's types leak into the public surface; the
+ * `Bun.serve` when the Bun global is present (with the engine's native
+ * route table, when it has one), `@hono/node-server` otherwise. Neither runtime's types leak into the public surface; the
  * handle exposes exactly what the `http()` plugin's lifecycle needs.
  */
 
+import type { BunRoutes, Engine } from './engine.js';
 import { HTTP_ERROR_CODES, HttpConfigError } from './error.js';
 
 export type ListenOptions = {
@@ -31,7 +32,12 @@ type BunServerLike = {
 };
 
 type BunGlobalLike = {
-  serve(options: { readonly port: number; readonly hostname?: string; readonly fetch: FetchLike }): BunServerLike;
+  serve(options: {
+    readonly port: number;
+    readonly hostname?: string;
+    readonly fetch: FetchLike;
+    readonly routes?: BunRoutes;
+  }): BunServerLike;
 };
 
 /** Narrow structural view of the Bun global — `@types/node` has no Bun. */
@@ -47,18 +53,31 @@ function listenFailure(port: number, cause: unknown): HttpConfigError {
   });
 }
 
-export async function listen(fetch: FetchLike, options: ListenOptions): Promise<ListenHandle> {
+/**
+ * Serve an engine, or a bare fetch handler. Under Bun an engine's
+ * `bunRoutes` go to `Bun.serve({ routes })`, so those routes are matched
+ * natively; everything else reaches `fetch`.
+ */
+export async function listen(target: Engine | FetchLike, options: ListenOptions): Promise<ListenHandle> {
+  const fetch = typeof target === 'function' ? target : target.fetch;
+  const routes = typeof target === 'function' ? undefined : target.bunRoutes;
   const bun = bunGlobal();
-  if (bun !== undefined) return listenBun(bun, fetch, options);
+  if (bun !== undefined) return listenBun(bun, fetch, routes, options);
   return listenNode(fetch, options);
 }
 
-function listenBun(bun: BunGlobalLike, fetch: FetchLike, options: ListenOptions): ListenHandle {
+function listenBun(
+  bun: BunGlobalLike,
+  fetch: FetchLike,
+  routes: BunRoutes | undefined,
+  options: ListenOptions,
+): ListenHandle {
   let server: BunServerLike;
   try {
     server = bun.serve({
       port: options.port,
       fetch,
+      ...(routes === undefined ? {} : { routes }),
       ...(options.hostname === undefined ? {} : { hostname: options.hostname }),
     });
   } catch (error) {

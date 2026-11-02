@@ -7,7 +7,7 @@
  * {@link BaseRequestCtx} via `AsyncLocalStorage`.
  *
  * Ambient context is a smell — prefer the explicit `ctx` parameter and
- * derivers everywhere a signature is yours to change. Note that OTel
+ * steps everywhere a signature is yours to change. Note that OTel
  * trace context already propagates this way, so span/log correlation
  * needs none of this.
  *
@@ -15,15 +15,23 @@
  * Import it as `@arki/http/context`.
  */
 import type { BaseRequestCtx } from './derive.js';
+/** Engine seam: an engine was built; `enabled` says whether it runs requests inside the store. */
+export declare function registerEngineContext(enabled: boolean): void;
 /**
  * The context of the request currently being handled, or `undefined`
  * outside a request (startup, background jobs, tests that call handlers
  * directly).
+ *
+ * Needs an engine built with `{ requestContext: true }`: entering the store
+ * costs every request, so it is off unless an app asks for it. Calling this
+ * when engines exist but none opted in throws `ARKI_HTTP_E014`, so a missing
+ * option is a loud error, not a silent `undefined`.
  */
 export declare function requestContext(): BaseRequestCtx | undefined;
 /**
  * Engine seam: run `fn` with `ctx` as the ambient request context. Called
- * by the engine around every request — not part of the public surface.
+ * by an engine built with `{ requestContext: true }` around every request —
+ * not part of the public surface.
  */
 export declare function runWithRequestContext<T>(ctx: BaseRequestCtx, fn: () => T): T;
 //# sourceMappingURL=context.d.ts.map

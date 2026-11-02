@@ -1,0 +1,1466 @@
+{
+  "package": "@arki/http",
+  "version": "0.4.1",
+  "entries": [
+    {
+      "subpath": ".",
+      "name": "around",
+      "kind": "function",
+      "signature": "export declare function around<In>(fn: <T>(context: In, next: () => Promise<T>) => Promise<T>): HttpAround<In>;",
+      "jsdocSummary": "Wrap a route: `routes().use(around(inTransaction))`."
+    },
+    {
+      "subpath": ".",
+      "name": "BaseRequestCtx",
+      "kind": "type",
+      "signature": "export type BaseRequestCtx = { readonly req: Request; readonly url: URL; /** Inbound `x-request-id` header, else a fresh UUID. */ readonly requestId: RequestId; /** Aborts when the client disconnects. */ readonly signal: AbortSignal; };",
+      "jsdocSummary": "The context every handler and step receives. Steps extend it with their own typed keys."
+    },
+    {
+      "subpath": ".",
+      "name": "buildEngine",
+      "kind": "function",
+      "signature": "export declare function buildEngine(bundles: readonly RouteBundle[], options?: EngineOptions): Engine;",
+      "jsdocSummary": "Build the default engine: this router for the routes it can serve, the Hono engine for the rest, one fetch in front of both. Duplicate routes fail here, across both engines, with the same error as before."
+    },
+    {
+      "subpath": ".",
+      "name": "buildHonoEngine",
+      "kind": "function",
+      "signature": "export declare function buildHonoEngine(bundles: readonly RouteBundle[], options?: EngineOptions): Engine;",
+      "jsdocSummary": "Compose bundles into a single fetch handler. Throws `ARKI_HTTP_E002`/`E006` on route collisions and malformed mounts — callers (the `http()` plugin's `boot`) let these bubble as boot failures."
+    },
+    {
+      "subpath": ".",
+      "name": "BunRequestLike",
+      "kind": "type",
+      "signature": "export type BunRequestLike = Request & { readonly params: Readonly<Record<string, string>>; };",
+      "jsdocSummary": "What `Bun.serve` passes a `routes` handler: the request with its matched path parameters."
+    },
+    {
+      "subpath": ".",
+      "name": "BunRoutes",
+      "kind": "type",
+      "signature": "export type BunRoutes = Readonly<Record<string, Readonly<Record<string, (req: BunRequestLike) => Response | Promise<Response>>>>>;",
+      "jsdocSummary": "A `Bun.serve` `routes` table: path → method → handler."
+    },
+    {
+      "subpath": ".",
+      "name": "CheckResult",
+      "kind": "type",
+      "signature": "export type CheckResult = readonly StandardSchemaV1.Issue[] | undefined;",
+      "jsdocSummary": "What a cross-field `check` returns: the problems it found, or nothing. Any issue answers 400."
+    },
+    {
+      "subpath": ".",
+      "name": "codec",
+      "kind": "function",
+      "signature": "export declare function codec<TDecode extends StandardSchemaV1, TEncode extends StandardSchemaV1>(decode: TDecode, encode: TEncode & NoInfer<Reversible<TDecode, TEncode>>): { readonly decode: TDecode; readonly encode: TEncode; };",
+      "jsdocSummary": "A two-way field: `decode` turns the wire form into the value the handler sees, `encode` turns that value back. The pair must reverse each other's types, or the call fails to compile."
+    },
+    {
+      "subpath": ".",
+      "name": "Codec",
+      "kind": "type",
+      "signature": "export type Codec = { readonly decode: StandardSchemaV1; readonly encode: StandardSchemaV1; };",
+      "jsdocSummary": "Wire <-> value. `decode` reads what arrives; `encode` writes what leaves. Create with {@link codec}."
+    },
+    {
+      "subpath": ".",
+      "name": "composeMiddleware",
+      "kind": "function",
+      "signature": "export declare function composeMiddleware(fetch: (req: Request) => Promise<Response>, middleware: readonly HttpMiddleware[]): (req: Request) => Promise<Response>; ; export declare function composeMiddleware(engine: Engine, middleware: readonly HttpMiddleware[]): Engine;",
+      "jsdocSummary": "Wrap a fetch handler in middleware (first = outermost). A middleware that throws resolves to the coded error envelope — `HttpError` keeps its status, anything else is a 500. Wrap a whole engine: its `fetch` and, when it has them, every Bun route handler, so a request Bun matches natively still runs the same layers. A layer that forwards a different `Request` loses the native match; the engine then routes that request itself."
+    },
+    {
+      "subpath": ".",
+      "name": "ContractLike",
+      "kind": "type",
+      "signature": "export type ContractLike = { readonly kind: 'http' | 'sse'; readonly id: string; readonly method: HttpMethod; readonly path: string; readonly summary?: string; readonly params?: Fields; readonly query?: Fields; readonly headers?: Fields; readonly body?: Wire; readonly output?: Wire | RawOutput; readonly responses?: ResponseSchemas; readonly failures?: readonly FailureDefinitionLike[]; readonly event?: Wire; readonly heartbeatMs?: number; check?(input: ErasedInput): CheckResult; toDotAction(): RouteMeta; };",
+      "jsdocSummary": "Generics-erased view of a contract — what bundles store and the engine, manifest registration, and OpenAPI generation consume. Both contract types are structurally assignable to it; no casts involved. `check` is a method so a contract's typed check (which reads its own decoded request) still fits."
+    },
+    {
+      "subpath": ".",
+      "name": "contractMeta",
+      "kind": "function",
+      "signature": "export declare function contractMeta(contract: ContractLike): RouteMeta;",
+      "jsdocSummary": "Manifest metadata for a contract — what contract `toDotAction()` returns for DOT plugins and what `registerRoutes` feeds into `ctx.registerAction` during the shim window. SSE contracts mark `streaming` and carry the per-event schema as `output`. A `raw()` route carries `raw` instead of `output`, and `responses` holds one JSON Schema per declared status."
+    },
+    {
+      "subpath": ".",
+      "name": "describeInternalError",
+      "kind": "function",
+      "signature": "export declare function describeInternalError(error: unknown): string;",
+      "jsdocSummary": "Message for an unexpected (non-{@link HttpError}) failure: full detail in development, redacted in production — internals never leak onto the wire of a deployed app."
+    },
+    {
+      "subpath": ".",
+      "name": "Engine",
+      "kind": "type",
+      "signature": "export type Engine = { readonly fetch: (req: Request) => Promise<Response>; /** * The routes Bun can match natively, when the engine has any. `listen` * hands them to `Bun.serve({ routes })`; a request they match never * reaches `fetch`. Both answer the same. */ readonly bunRoutes?: BunRoutes; /** Contract ids + mount ids, in registration order. */ readonly routeIds: readonly string[]; };",
+      "jsdocSummary": "A built engine: the composed fetch handler plus its route inventory."
+    },
+    {
+      "subpath": ".",
+      "name": "EngineOptions",
+      "kind": "type",
+      "signature": "export type EngineOptions = { /** * Run every request inside the ambient store, so `requestContext()` * (`@arki/http/context`) answers from anywhere in the call stack. Off by * default: entering the store costs every request, and the explicit `ctx` * parameter covers almost every need. */ readonly requestContext?: boolean; };",
+      "jsdocSummary": "What `buildEngine` and `buildHonoEngine` take besides the bundles."
+    },
+    {
+      "subpath": ".",
+      "name": "ErasedAround",
+      "kind": "type",
+      "signature": "export type ErasedAround = { readonly around: (ctx: never, next: () => Promise<Response>) => Promise<Response>; };",
+      "jsdocSummary": "An around in the bundle's stage list: wraps every stage declared after it and the handler (see `around` in `middleware.ts`). Stored erased."
+    },
+    {
+      "subpath": ".",
+      "name": "ErasedInput",
+      "kind": "type",
+      "signature": "export type ErasedInput = { readonly params: unknown; readonly query: unknown; readonly headers: unknown; readonly body: unknown; };",
+      "jsdocSummary": "The decoded request a generics-erased `check` reads."
+    },
+    {
+      "subpath": ".",
+      "name": "ErasedStage",
+      "kind": "type",
+      "signature": "export type ErasedStage = ErasedStep | ErasedAround;",
+      "jsdocSummary": "Everything a bundle runs before the handler, in declaration order."
+    },
+    {
+      "subpath": ".",
+      "name": "ErasedStep",
+      "kind": "type",
+      "signature": "export type ErasedStep = ErasedFailureHeaders & { readonly step: (ctx: never) => object | PromiseLike<object>; };",
+      "jsdocSummary": "A step in the bundle's stage list: a plain function whose returned object is spread into the context (see `step` in `middleware.ts`). Stored erased."
+    },
+    {
+      "subpath": ".",
+      "name": "errorResponse",
+      "kind": "function",
+      "signature": "export declare function errorResponse(status: number, code: string, message: string, options?: { readonly remediation?: string; readonly docsUrl?: string; readonly headers?: Readonly<Record<string, string>>; readonly data?: unknown; }): Response;",
+      "jsdocSummary": "Build the envelope `Response` for a coded failure."
+    },
+    {
+      "subpath": ".",
+      "name": "FailureDefinitionLike",
+      "kind": "type",
+      "signature": "export type FailureDefinitionLike = { readonly code: string; readonly dataSchema: StandardSchemaV1 | undefined; (...args: never[]): Failure; };",
+      "jsdocSummary": "A failure definition as a contract lists it: what `defineFailure` returns. The client revives a listed failure with it (code + data schema); the failure value itself carries the status and message the server answers with."
+    },
+    {
+      "subpath": ".",
+      "name": "FailureHeaders",
+      "kind": "type",
+      "signature": "export type FailureHeaders<Value> = { readonly failureHeaders?: (this: void, failure: Extract<Awaited<Value>, Failure>) => Readonly<Record<string, string>> | undefined; };",
+      "jsdocSummary": "Transport metadata for an inferred returned failure; execution remains server-bound."
+    },
+    {
+      "subpath": ".",
+      "name": "Field",
+      "kind": "type",
+      "signature": "export type Field = Wire | Optional;",
+      "jsdocSummary": "One params, headers or query entry."
+    },
+    {
+      "subpath": ".",
+      "name": "Fields",
+      "kind": "type",
+      "signature": "export type Fields = Readonly<Record<string, Field>>;",
+      "jsdocSummary": "Params, headers or query: one field per key."
+    },
+    {
+      "subpath": ".",
+      "name": "FieldsOf",
+      "kind": "type",
+      "signature": "export type FieldsOf<TFields extends Fields> = Flatten<{ readonly [K in keyof TFields as TFields[K] extends Optional ? never : K]: ValueOf<TFields[K]>; } & { readonly [K in keyof TFields as TFields[K] extends Optional ? K : never]?: ValueOf<TFields[K]>; }>;",
+      "jsdocSummary": "The handler's and the client's view of a field record: the {@link optional} marker decides `?:`."
+    },
+    {
+      "subpath": ".",
+      "name": "HandlerResult",
+      "kind": "type",
+      "signature": "export type HandlerResult<TDef> = PlainResult<TDef> | ReplyResult<TDef> | RouteFailure<TDef>;",
+      "jsdocSummary": "What a JSON handler may return, read from the contract:"
+    },
+    {
+      "subpath": ".",
+      "name": "HTTP_CLIENT_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const HTTP_CLIENT_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"schema.invalid_input\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { issues: readonly import(\"@standard-schema/spec\").StandardSchemaV1.Issue[]; }>>, import(\"@arki/failure\").FailureDefinition<\"failure.invalid_envelope\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { reason: (readonly [\"malformed\", \"unknown_code\", \"unsupported_version\", \"invalid_data\", \"non_json_data\", \"unstable_schema\", \"invalid_json\"])[number]; }>>, import(\"@arki/failure\").FailureDefinition<\"schema.async_required\", undefined>, import(\"@arki/failure\").FailureDefinition<\"schema.validator_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"resilience.circuit_open\", undefined>, import(\"@arki/failure\").FailureDefinition<\"resilience.bulkhead_rejected\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.network_failure\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_timeout\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "HTTP_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const HTTP_ERROR_CODES: { /** * `start` could not bind the port. * * @fix Free the port, or pass another `port`. The error `cause` names the system error. * @verify bun run test -- src/tests/engine.test.ts */ readonly listenFailed: 'ARKI_HTTP_E001'; /** * Two bindings claim the same method and path, or a bundle token is listed twice. * * @fix Remove one binding. Each method and path is bound once. * @verify bun run test -- src/tests/engine.test.ts */ readonly duplicateRoute: 'ARKI_HTTP_E002'; /** * `stop` exceeded `drainTimeoutMs` with requests still in flight. * * @fix Raise `drainTimeoutMs`, or shorten the slow handlers. Check that handlers honour the abort signal. * @verify bun run test -- src/tests/engine.test.ts */ readonly drainTimeout: 'ARKI_HTTP_E005'; /** * A mount path is malformed. * * @fix Use a path that starts with `/` and has no query or fragment. * @verify bun run test -- src/tests/engine.test.ts */ readonly invalidMount: 'ARKI_HTTP_E006'; /** * `requestContext()` was called, but every engine in this process was built without `requestContext: true`. * * @fix Pass `{ requestContext: true }` to `buildEngine` or `buildHonoEngine` (or `requestContext: true` to `http()`), or read the explicit `ctx` instead. * @verify bun run test -- src/tests/context.test.ts */ readonly requestContextDisabled: 'ARKI_HTTP_E014'; /** * A Dot HTTP action carries missing or incompatible projection metadata. * * @fix Build the action with the route helpers, not by hand, so its metadata is complete. * @verify bun run test -- src/tests/dot.test.ts */ readonly invalidActionMeta: 'ARKI_HTTP_E009'; /** * A route contract is inconsistent: params, headers or responses do not fit its path or each other. Thrown at declaration. * * @fix Make the params schema match the `:name` segments of the path, and declare each response status once. * @verify bun run test -- src/tests/contract.test.ts */ readonly invalidContract: 'ARKI_HTTP_E011'; /** * A webhook scheme has no secrets, an empty secret, or a secret it cannot decode. Thrown when the scheme is created. * * @fix Pass at least one non-empty secret in the format the scheme expects. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly invalidWebhookScheme: 'ARKI_HTTP_E012'; /** * A contract schema cannot describe itself as JSON Schema (OpenAPI, manifest). Thrown by `contractMeta` and `toOpenApi`. * * @fix Wrap the schema with `withJsonSchema`, or use a schema library that supports Standard JSON Schema. * @verify bun run test -- src/tests/openapi.test.ts */ readonly noJsonSchema: 'ARKI_HTTP_E013'; /** * Request validation failed (params, headers, query or body), or the body is not valid JSON. Answers 400. * * @fix Send a request that matches the contract. The error `issues` list each failing field. * @verify bun run test -- src/tests/engine.test.ts */ readonly badRequest: 'ARKI_HTTP_E400'; /** * A route that needs an idempotency key got none, or an unusable one. Answers 400. * * @fix Send an `Idempotency-Key` header with a unique value per logical action. * @verify bun run test -- src/tests/idempotency.test.ts */ readonly idempotencyKeyMissing: 'ARKI_HTTP_E410'; /** * An idempotency key was reused with a different method, path, query or body. Answers 422. * * @fix Use a new key for a new request. Reuse a key only to repeat the same request. * @verify bun run test -- src/tests/idempotency.test.ts */ readonly idempotencyKeyReused: 'ARKI_HTTP_E411'; /** * A request with this idempotency key is still running. Answers 409 with `retry-after`. * * @fix Wait for `retry-after` seconds, then send the same request with the same key. * @verify bun run test -- src/tests/idempotency.test.ts */ readonly idempotencyInProgress: 'ARKI_HTTP_E412'; /** * A request body is larger than the route allows. Answers 413. * * @fix Send a smaller body, or raise the body limit of the webhook scheme or route. * @verify bun run test -- src/tests/engine.test.ts */ readonly payloadTooLarge: 'ARKI_HTTP_E413'; /** * A client call ran past its `timeoutMs`. Thrown by `@arki/http/client`; never sent on the wire. * * @fix Raise `timeoutMs`, or retry. Retries are safe only for idempotent calls. * @verify bun run test -- src/tests/client-retry.test.ts */ readonly requestTimeout: 'ARKI_HTTP_E408'; /** * A webhook signature header is missing or malformed. Answers 401. * * @fix Send the signature headers the scheme expects. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly webhookMalformed: 'ARKI_HTTP_E420'; /** * No webhook signature matches the body with any of the secrets. Answers 401. * * @fix Check the secret, and that the body reaches the handler unchanged. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly webhookSignatureMismatch: 'ARKI_HTTP_E421'; /** * A webhook signed time is too far from now: a replay, or a clock far off. Answers 401. * * @fix Fix the sender or server clock, or widen the time window. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly webhookStale: 'ARKI_HTTP_E422'; /** * A step rejected the request credentials. * * @fix Send valid credentials. * @verify bun run test -- src/tests/engine.test.ts */ readonly unauthorized: 'ARKI_HTTP_E401'; /** * A step rejected the request permissions. * * @fix Use an account that has the permission. * @verify bun run test -- src/tests/engine.test.ts */ readonly forbidden: 'ARKI_HTTP_E403'; /** * No route matches the request. Answers 404. * * @fix Check the method and path against the contract. * @verify bun run test -- src/tests/engine.test.ts */ readonly notFound: 'ARKI_HTTP_E404'; /** * Handler crash or output-schema violation. Answers 500. * * @fix Read the server log. Fix the handler, or make its output match the contract. * @verify bun run test -- src/tests/engine.test.ts */ readonly internal: 'ARKI_HTTP_E500'; /** * A handler returned a `Response` without `output: raw()`, or a value from a `raw()` route. Answers 500. * * @fix Declare `output: raw()` for a handler that returns a `Response`, and return a `Response` from it. * @verify bun run test -- src/tests/failures.test.ts */ readonly rawResponseMismatch: 'ARKI_HTTP_E510'; /** * A handler result does not fit its contract: undeclared status, malformed `reply`, or a value on a no-output route. Answers 500. * * @fix Return only the statuses the contract declares. * @verify bun run test -- src/tests/failures.test.ts */ readonly invalidResponse: 'ARKI_HTTP_E511'; };",
+      "jsdocSummary": "Stable error codes for `@arki/http`. `E0NN` codes surface through the DOT lifecycle (boot/start/stop failures); `E4xx`/`E5xx` codes surface on the wire in the error envelope. The digits of a wire code name the kind of failure; they are not always the HTTP status (`E510` and `E511` answer 500)."
+    },
+    {
+      "subpath": ".",
+      "name": "HTTP_SERVER_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const HTTP_SERVER_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": "Framework request setup can refuse before a route handler or step runs."
+    },
+    {
+      "subpath": ".",
+      "name": "HttpAround",
+      "kind": "type",
+      "signature": "export type HttpAround<In> = { readonly around: <T>(context: In, next: () => Promise<T>) => Promise<T>; };",
+      "jsdocSummary": "What {@link around} makes: wraps the rest of the bundle and the handler, adds nothing."
+    },
+    {
+      "subpath": ".",
+      "name": "HttpClientFailure",
+      "kind": "type",
+      "signature": "export type HttpClientFailure = ReturnType<(typeof HTTP_CLIENT_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "HttpConfigError",
+      "kind": "class",
+      "signature": "export declare class HttpConfigError extends Error { readonly code: string; readonly remediation: string; readonly docsUrl: string; constructor(fields: { readonly code: string; readonly message: string; readonly remediation: string; readonly docsUrl?: string; readonly cause?: unknown; }); }",
+      "jsdocSummary": "A composition or lifecycle failure. Carries the same code/remediation/ docsUrl fields the DOT kernel propagates into diagnostics when a hook throws."
+    },
+    {
+      "subpath": ".",
+      "name": "HttpError",
+      "kind": "class",
+      "signature": "export declare class HttpError extends Error { readonly status: number; readonly code: string; readonly remediation: string | undefined; readonly docsUrl: string | undefined; /** Extra response headers — e.g. `www-authenticate` on a 401, `retry-after` on a 429. */ readonly headers: Readonly<Record<string, string>> | undefined; readonly data: unknown; constructor(status: number, code: string, message: string, options?: { readonly remediation?: string; readonly docsUrl?: string; readonly headers?: Readonly<Record<string, string>>; readonly cause?: unknown; readonly data?: unknown; }); }",
+      "jsdocSummary": "A per-request failure with an HTTP status and a stable code. Throw from a handler or step to short-circuit into the wire envelope:"
+    },
+    {
+      "subpath": ".",
+      "name": "HttpErrorEnvelope",
+      "kind": "type",
+      "signature": "export type HttpErrorEnvelope = { readonly error: { readonly code: string; readonly message: string; readonly remediation?: string; readonly docsUrl?: string; /** The failure's data, when a handler returned an `@arki/failure` failure that carries some. */ readonly data?: unknown; }; };",
+      "jsdocSummary": "The wire error envelope. Stable shape — agents parse this."
+    },
+    {
+      "subpath": ".",
+      "name": "HttpMethod",
+      "kind": "type",
+      "signature": "export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';",
+      "jsdocSummary": "Methods a {@link RouteContract} can declare."
+    },
+    {
+      "subpath": ".",
+      "name": "HttpMiddleware",
+      "kind": "type",
+      "signature": "export type HttpMiddleware = (req: Request, next: (req: Request) => Promise<Response>) => Response | Promise<Response>;",
+      "jsdocSummary": "App-wide middleware: a fetch-shaped wrapper. The first middleware in a list runs outermost. Use for cross-cutting concerns that must see or touch the raw request/response — CORS, request logging, compression. For per-request *values* (auth principals, tenant handles), use bundle steps — they are typed into handler contexts; middleware is not."
+    },
+    {
+      "subpath": ".",
+      "name": "HttpStep",
+      "kind": "type",
+      "signature": "export type HttpStep<In, R extends object | PromiseLike<object>> = FailureHeaders<R> & { readonly step: (context: In) => R; };",
+      "jsdocSummary": "What {@link step} makes: reads `In`, returns `R` (an object to add, or a failure)."
+    },
+    {
+      "subpath": ".",
+      "name": "IDEMPOTENCY_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const IDEMPOTENCY_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_required\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_reused\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_in_progress\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_claim_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_replay_invalid\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_write_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_ownership_lost\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_response_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_too_large\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_unreadable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_hash_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyClaimUnconfirmed",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyClaimUnconfirmed: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_claim_unconfirmed\", undefined>;",
+      "jsdocSummary": "Cache acquisition did not confirm whether this request owns the key."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyHashUnavailable",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyHashUnavailable: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_hash_unavailable\", undefined>;",
+      "jsdocSummary": "The runtime cannot securely fingerprint a protected request."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyInProgress",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyInProgress: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_in_progress\", undefined>;",
+      "jsdocSummary": "The original protected write is still running."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyKeyRequired",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyKeyRequired: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_required\", undefined>;",
+      "jsdocSummary": "A protected write has no valid idempotency key."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyKeyReused",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyKeyReused: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_reused\", undefined>;",
+      "jsdocSummary": "The key identifies a different request."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyOwnershipLost",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyOwnershipLost: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_ownership_lost\", undefined>;",
+      "jsdocSummary": "The expected owner cannot persist a response."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyReleaseUnconfirmed",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyReleaseUnconfirmed: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_release_unconfirmed\", undefined>;",
+      "jsdocSummary": "Release of a reconciled reservation was not confirmed."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyReplayInvalid",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyReplayInvalid: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_replay_invalid\", undefined>;",
+      "jsdocSummary": "Persisted replay data cannot be safely reconstructed."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyRequestTooLarge",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyRequestTooLarge: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_too_large\", undefined>;",
+      "jsdocSummary": "The request cannot be fingerprinted within the configured bound."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyRequestUnreadable",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyRequestUnreadable: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_unreadable\", undefined>;",
+      "jsdocSummary": "Request bytes could not be read before idempotency ownership or application work."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyResponseUnavailable",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyResponseUnavailable: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_response_unavailable\", undefined>;",
+      "jsdocSummary": "Application work ran but its response cannot be stored for replay."
+    },
+    {
+      "subpath": ".",
+      "name": "IdempotencyWriteUnconfirmed",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyWriteUnconfirmed: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_write_unconfirmed\", undefined>;",
+      "jsdocSummary": "Application work ran but persistence of its response is unconfirmed."
+    },
+    {
+      "subpath": ".",
+      "name": "listen",
+      "kind": "function",
+      "signature": "export declare function listen(target: Engine | FetchLike, options: ListenOptions): Promise<ListenHandle>;",
+      "jsdocSummary": "Serve an engine, or a bare fetch handler. Under Bun an engine's `bunRoutes` go to `Bun.serve({ routes })`, so those routes are matched natively; everything else reaches `fetch`."
+    },
+    {
+      "subpath": ".",
+      "name": "ListenHandle",
+      "kind": "type",
+      "signature": "export type ListenHandle = { readonly port: number; readonly hostname: string; /** Stop accepting new connections; in-flight requests continue. */ stopAccepting(): void; /** Sever remaining connections and release the port. */ forceClose(): void; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "ListenOptions",
+      "kind": "type",
+      "signature": "export type ListenOptions = { readonly port: number; readonly hostname?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "MountBinding",
+      "kind": "type",
+      "signature": "export type MountBinding = { readonly id: string; readonly path: string; readonly transport: MountTransport; readonly handler: (req: Request) => Response | Promise<Response>; };",
+      "jsdocSummary": "A mounted foreign fetch handler (oRPC/tRPC router, static files, …)."
+    },
+    {
+      "subpath": ".",
+      "name": "MountMeta",
+      "kind": "type",
+      "signature": "export type MountMeta = { /** Stable identifier — lands in the manifest like a contract id. */ readonly id: string; /** Manifest transport tag. Defaults to `'custom'`. */ readonly transport?: MountTransport; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "MountPath",
+      "kind": "type",
+      "signature": "export type MountPath = `/${string}`;",
+      "jsdocSummary": "A mount path. It must start with \"/\": a relative path is a compile error, and `assertMountPath` still rejects it (and spaces) for code that skips types."
+    },
+    {
+      "subpath": ".",
+      "name": "MountTransport",
+      "kind": "type",
+      "signature": "export type MountTransport = 'orpc' | 'trpc' | 'rpc' | 'custom';",
+      "jsdocSummary": "Non-HTTP transports a {@link RouteBundleBuilder.mount} can declare."
+    },
+    {
+      "subpath": ".",
+      "name": "NetworkFailure",
+      "kind": "variable",
+      "signature": "export declare const NetworkFailure: import(\"@arki/failure\").FailureDefinition<\"http.network_failure\", undefined>;",
+      "jsdocSummary": "A fetch attempt failed to reach its destination."
+    },
+    {
+      "subpath": ".",
+      "name": "OpenApiInfo",
+      "kind": "type",
+      "signature": "export type OpenApiInfo = { readonly title: string; readonly version: string; readonly description?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "optional",
+      "kind": "function",
+      "signature": "export declare function optional<TWire extends Wire>(schema: TWire): Optional<TWire>;",
+      "jsdocSummary": "Mark a field the request may leave out. A missing key reaches the handler as `undefined`, without running the schema; a present one runs it."
+    },
+    {
+      "subpath": ".",
+      "name": "Optional",
+      "kind": "type",
+      "signature": "export type Optional<TWire extends Wire = Wire> = { readonly schema: TWire; readonly optional: true; };",
+      "jsdocSummary": "A header, query key or optional path placeholder the request may leave out. Create with {@link optional}."
+    },
+    {
+      "subpath": ".",
+      "name": "orThrowHttp",
+      "kind": "function",
+      "signature": "export declare function orThrowHttp<Value, const Definitions extends readonly FailureDefinitionLike[]>(value: Value & (Extract<Value, Failure> extends ReturnType<Definitions[number]> ? unknown : never), definitions: Definitions, options?: { readonly headers?: Readonly<Record<string, string>>; }): Exclude<Value, Failure>;",
+      "jsdocSummary": "Exception bridge for framework adapters; validate the boundary's exact declared definitions first."
+    },
+    {
+      "subpath": ".",
+      "name": "ParamsOf",
+      "kind": "type",
+      "signature": "export type ParamsOf<TPath extends string> = Readonly<Record<Exclude<PathParams<TPath>, OptionalParams<TPath>>, string> & Partial<Record<OptionalParams<TPath>, string>>>;",
+      "jsdocSummary": "Typed view of a path's parameters: every value is a string, an optional one may be missing."
+    },
+    {
+      "subpath": ".",
+      "name": "PathParams",
+      "kind": "type",
+      "signature": "export type PathParams<TPath extends string> = RawParams<TPath> extends infer P extends string ? (P extends `${infer Name}?` ? Name : P) : never;",
+      "jsdocSummary": "Path-parameter names extracted from a path literal at the type level: `'/orders/:id/items/:itemId'` → `'id' | 'itemId'`. An optional placeholder (`:itemId?`) counts under its plain name."
+    },
+    {
+      "subpath": ".",
+      "name": "raw",
+      "kind": "function",
+      "signature": "export declare function raw(options?: { readonly contentType?: string; }): RawOutput;",
+      "jsdocSummary": "Declare `output: raw()` when the handler returns a `Response` it built — a redirect, a file, a stream, or a handler that owns its own error formats. The engine passes the `Response` through and never validates it. `contentType` only feeds OpenAPI. `responses` may still document the payload; the engine ignores it in raw mode."
+    },
+    {
+      "subpath": ".",
+      "name": "RawOutput",
+      "kind": "type",
+      "signature": "export type RawOutput = { readonly [RAW_OUTPUT]: true; readonly contentType?: string; };",
+      "jsdocSummary": "Marks a route's `output` as a raw `Response` the handler builds itself."
+    },
+    {
+      "subpath": ".",
+      "name": "reply",
+      "kind": "function",
+      "signature": "export declare function reply<const TStatus extends number, TBody>(status: TStatus, body: TBody, init?: { readonly headers?: Readonly<Record<string, string>>; }): Reply<TStatus, TBody>;",
+      "jsdocSummary": "Answer with one of the contract's `responses`: `reply(404, { reason })`. The status must be a key of `responses` and the body must fit its schema. Extra `headers` ride along on the response."
+    },
+    {
+      "subpath": ".",
+      "name": "Reply",
+      "kind": "type",
+      "signature": "export type Reply<TStatus extends number, TBody> = { readonly [REPLY]: true; readonly status: TStatus; readonly body: TBody; readonly headers?: Readonly<Record<string, string>>; };",
+      "jsdocSummary": "A handler's answer with a chosen status. Create with {@link reply}."
+    },
+    {
+      "subpath": ".",
+      "name": "RequestCancelled",
+      "kind": "variable",
+      "signature": "export declare const RequestCancelled: import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>;",
+      "jsdocSummary": "The caller cancelled the request."
+    },
+    {
+      "subpath": ".",
+      "name": "requestId",
+      "kind": "variable",
+      "signature": "export declare const requestId: import(\"@arki/contracts\").BrandedIdDeclaration<\"\", \"http.request\">;",
+      "jsdocSummary": "Request correlation identity; supplied header values retain their existing format."
+    },
+    {
+      "subpath": ".",
+      "name": "RequestId",
+      "kind": "type",
+      "signature": "export type RequestId = IdOf<typeof requestId>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "RequestTimeout",
+      "kind": "variable",
+      "signature": "export declare const RequestTimeout: import(\"@arki/failure\").FailureDefinition<\"http.request_timeout\", undefined>;",
+      "jsdocSummary": "The request did not receive a response before its deadline."
+    },
+    {
+      "subpath": ".",
+      "name": "RESPONSE_CACHE_ABANDON_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const RESPONSE_CACHE_ABANDON_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_release_unconfirmed\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "RESPONSE_CACHE_BEGIN_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const RESPONSE_CACHE_BEGIN_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_claim_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_replay_invalid\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "RESPONSE_CACHE_FINISH_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const RESPONSE_CACHE_FINISH_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_write_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_ownership_lost\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "ResponseSchemas",
+      "kind": "type",
+      "signature": "export type ResponseSchemas = Readonly<Record<number, Wire>>;",
+      "jsdocSummary": "Status code to body schema, for the statuses a handler may answer with `reply(status, body)`. Integer keys 200-599. Never 204 or 304 (they carry no body: a route without `output` answers 204), and never 200 next to a schema `output`. On a `raw()` route the schemas only document."
+    },
+    {
+      "subpath": ".",
+      "name": "Reversible",
+      "kind": "type",
+      "signature": "export type Reversible<TDecode extends StandardSchemaV1, TEncode extends StandardSchemaV1> = [ SchemaOutput<TDecode> ] extends [SchemaInput<TEncode>] ? [SchemaOutput<TEncode>] extends [SchemaInput<TDecode>] ? unknown : never : never;",
+      "jsdocSummary": "`unknown` when `decode`'s output feeds `encode` and `encode`'s output feeds `decode`; `never` (a compile error at {@link codec}) when the pair does not reverse."
+    },
+    {
+      "subpath": ".",
+      "name": "route",
+      "kind": "variable",
+      "signature": "export declare const route: { get: <TPath extends string, TDef extends RouteDef<TPath>, TParams extends Fields | undefined = undefined, TQuery extends Fields | undefined = undefined, THeaders extends Fields | undefined = undefined, TBody extends Wire | undefined = undefined>(path: TPath, def: TDef & CheckOf<TPath, TParams, TQuery, THeaders, TBody>) => RouteContract<TPath, TDef>; post: <TPath extends string, TDef extends RouteDef<TPath>, TParams extends Fields | undefined = undefined, TQuery extends Fields | undefined = undefined, THeaders extends Fields | undefined = undefined, TBody extends Wire | undefined = undefined>(path: TPath, def: TDef & CheckOf<TPath, TParams, TQuery, THeaders, TBody>) => RouteContract<TPath, TDef>; put: <TPath extends string, TDef extends RouteDef<TPath>, TParams extends Fields | undefined = undefined, TQuery extends Fields | undefined = undefined, THeaders extends Fields | undefined = undefined, TBody extends Wire | undefined = undefined>(path: TPath, def: TDef & CheckOf<TPath, TParams, TQuery, THeaders, TBody>) => RouteContract<TPath, TDef>; patch: <TPath extends string, TDef extends RouteDef<TPath>, TParams extends Fields | undefined = undefined, TQuery extends Fields | undefined = undefined, THeaders extends Fields | undefined = undefined, TBody extends Wire | undefined = undefined>(path: TPath, def: TDef & CheckOf<TPath, TParams, TQuery, THeaders, TBody>) => RouteContract<TPath, TDef>; delete: <TPath extends string, TDef extends RouteDef<TPath>, TParams extends Fields | undefined = undefined, TQuery extends Fields | undefined = undefined, THeaders extends Fields | undefined = undefined, TBody extends Wire | undefined = undefined>(path: TPath, def: TDef & CheckOf<TPath, TParams, TQuery, THeaders, TBody>) => RouteContract<TPath, TDef>; sse: <TPath extends string, TDef extends SseDef<TPath>, TParams extends Fields | undefined = undefined, TQuery extends Fields | undefined = undefined, THeaders extends Fields | undefined = undefined>(path: TPath, def: TDef & CheckOf<TPath, TParams, TQuery, THeaders, undefined>) => SseContract<TPath, TDef>; };",
+      "jsdocSummary": "Contract factories, one per method, plus {@link route.sse} for typed event streams."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteBinding",
+      "kind": "type",
+      "signature": "export type RouteBinding = FailureHeaders<Failure> & { /** Set by an adapter that watches this route; the engine skips all of it when absent. */ readonly observe?: ObserveBinding; readonly stages?: readonly ErasedStage[]; readonly contract: ContractLike; /** * Stored erased (`never` parameters) — typed handlers are assignable * via parameter contravariance from the bottom type; the engine crosses * the erasure boundary at the call site. Mirrors the DOT kernel's * hook-storage pattern. */ readonly handler: (input: never, ctx: never) => unknown; };",
+      "jsdocSummary": "A contract bound to its (generics-erased) handler."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteBundle",
+      "kind": "type",
+      "signature": "export type RouteBundle = { /** The steps and arounds, in declaration order. */ readonly stages: readonly ErasedStage[]; readonly bindings: readonly RouteBinding[]; readonly mounts: readonly MountBinding[]; /** Typed RPC mounts — optional so hand-rolled bundles stay valid. */ readonly rpcs?: readonly RpcBinding[]; };",
+      "jsdocSummary": "A plain value: stages + bound contracts + mounts. Published as an ordinary DOT service under a token and collected by the `http()` entrypoint — no new kernel concept."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteBundleBuilder",
+      "kind": "type",
+      "signature": "export type RouteBundleBuilder<TCtx extends BaseRequestCtx = BaseRequestCtx, TFailures extends Failure = never> = RouteBundle & { /** * Run a step before the handler: `routes().use(step(authed))`. The step's * object is added to the context; its failures join the bundle's failures, * so every route bound after it must declare them. A refusal answers with the * coded failure envelope. See `step`. */ use<R extends object | PromiseLike<object>>(step: HttpStep<TCtx, R>): RouteBundleBuilder<TCtx & Exclude<Awaited<R>, Failure>, TFailures | Extract<Awaited<R>, Failure>>; /** * Wrap everything declared after it and the handler: * `routes().use(around(inTransaction))`. Adds nothing to the context. See `around`. */ use(around: HttpAround<TCtx>): RouteBundleBuilder<TCtx, TFailures>; /** * Bind a JSON contract to its handler. `NoInfer` pins the input/result * types to the contract — without it, a handler returning the wrong * shape would silently widen `TDef` instead of failing to compile. */ bind<TPath extends string, TDef extends RouteDef<TPath>>(contract: RouteContract<TPath, TDef> & CoversFailures<NoInfer<TDef>, TFailures>, handler: RouteHandler<TPath, NoInfer<TDef>, TCtx>, options?: FailureHeaders<RouteFailure<NoInfer<TDef>>>): RouteBundleBuilder<TCtx, TFailures>; /** Bind an SSE contract to its event generator. */ bind<TPath extends string, TDef extends SseDef<TPath>>(contract: SseContract<TPath, TDef> & CoversFailures<NoInfer<TDef>, TFailures>, handler: SseHandler<TPath, NoInfer<TDef>, TCtx>, options?: FailureHeaders<RouteFailure<NoInfer<TDef>>>): RouteBundleBuilder<TCtx, TFailures>; /** * Mount a foreign fetch handler under a path prefix — an oRPC router, a * tRPC fetch adapter, a static-file handler. One manifest route, no * schemas, steps and arounds do NOT run for mounted handlers. */ mount(path: MountPath, handler: (req: Request) => Response | Promise<Response>, meta: MountMeta): RouteBundleBuilder<TCtx, TFailures>; /** * Bind a static {@link RpcMountContract} to its boot-time handlers. * Unlike `mount`, the bundle's steps and arounds RUN before dispatch, and * the context factory receives the accumulated ctx — keys steps added * before `.rpc()` are typed into it. */ rpc<TRpcCtx, const Contract extends RpcMountContract>(contract: Contract & CoversFailures<NoInfer<Contract>, TFailures>, handlers: RpcMountHandlers<TCtx, TRpcCtx>): RouteBundleBuilder<TCtx, TFailures>; };",
+      "jsdocSummary": "Immutable bundle builder. Every method returns a new builder; step-added keys accumulate in `TCtx` so later `bind` handlers see them typed."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteContract",
+      "kind": "type",
+      "signature": "export type RouteContract<TPath extends string = string, TDef extends RouteDef<TPath> = RouteDef<TPath>> = TDef & { readonly kind: 'http'; readonly method: HttpMethod; readonly path: TPath; toDotAction(): RouteMeta; };",
+      "jsdocSummary": "A JSON route contract. Create via {@link route}. `TDef` is the literal def, so the bound handler's input and result types, and the client's, are read straight from the declared schemas."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteDef",
+      "kind": "type",
+      "signature": "export type RouteDef<TPath extends string> = { /** Stable identifier — lands in the manifest and OpenAPI `operationId`. */ readonly id: string; readonly summary?: string; /** One field per path placeholder. An optional placeholder (`:x?`) takes an `optional(...)` field. */ readonly params?: Readonly<Record<PathParams<TPath>, Field>>; /** One field per header the route reads. Keys are lower-case. */ readonly headers?: Fields; /** One field per query key the route reads. */ readonly query?: Fields; readonly body?: Wire; /** * The success body. A schema: the handler returns its value, sent as * 200 JSON. `raw()`: the handler returns a `Response`. Absent: the handler * returns nothing and the route answers 204. Keys the schema does not * declare are sent unless the schema drops them (zod and valibot objects * do; an arktype object needs `'+': 'delete'`). */ readonly output?: Wire | RawOutput; readonly responses?: ResponseSchemas; /** * The failures the handler may return, as `defineFailure` definitions. A * returned failure answers with its status and the error envelope; the * client resolves to it instead of throwing. */ readonly failures?: readonly FailureDefinitionLike[]; /** * Cross-field check, after every field and the body decoded. Issues answer * 400 as `where.key: message`: give them paths like `['query', 'to']`. */ readonly check?: (input: never) => CheckResult; };",
+      "jsdocSummary": "What a JSON route declares. The generic `TDef` of {@link RouteContract} is the literal def."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteFailure",
+      "kind": "type",
+      "signature": "export type RouteFailure<TContract> = TContract extends { readonly failures: infer TFailures extends readonly FailureDefinitionLike[]; } ? ReturnType<TFailures[number]> : never;",
+      "jsdocSummary": "The failure values a contract lists: `RouteFailure<typeof getPost>`."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteHandler",
+      "kind": "type",
+      "signature": "export type RouteHandler<TPath extends string, TDef, TCtx extends BaseRequestCtx> = (input: RouteInput<TPath, TDef>, ctx: TCtx) => MaybePromise<HandlerResult<TDef>>;",
+      "jsdocSummary": "Handler signature inferred from a {@link RouteContract}."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteInput",
+      "kind": "type",
+      "signature": "export type RouteInput<TPath extends string, TDef> = { readonly params: TDef extends { readonly params: infer TFields extends Fields; } ? FieldsOf<TFields> : ParamsOf<TPath>; readonly query: TDef extends { readonly query: infer TFields extends Fields; } ? FieldsOf<TFields> : undefined; readonly headers: TDef extends { readonly headers: infer TFields extends Fields; } ? FieldsOf<TFields> : undefined; readonly body: TDef extends { readonly body: infer TWire extends Wire; } ? WireValue<TWire> : undefined; };",
+      "jsdocSummary": "The decoded inputs a bound handler receives (and a `check` reads). A def without `params` gives the raw path strings; without `query`, `headers` or `body`, `undefined`."
+    },
+    {
+      "subpath": ".",
+      "name": "RouteMeta",
+      "kind": "type",
+      "signature": "export type RouteMeta = { readonly id: string; readonly binding: 'http'; readonly direction: 'in'; readonly address: string; readonly summary?: string; readonly metaSchema: typeof HTTP_ACTION_META_SCHEMA; readonly meta: JsonObject; };",
+      "jsdocSummary": "The DOT action declaration derived from a contract."
+    },
+    {
+      "subpath": ".",
+      "name": "routes",
+      "kind": "function",
+      "signature": "export declare function routes(): RouteBundleBuilder;",
+      "jsdocSummary": "Start an empty bundle. See the module docs for the authoring pattern."
+    },
+    {
+      "subpath": ".",
+      "name": "RpcActionMeta",
+      "kind": "type",
+      "signature": "export type RpcActionMeta = { readonly id: string; readonly binding: MountTransport; readonly direction: 'in'; readonly address: string; readonly summary?: string; readonly metaSchema: typeof HTTP_ACTION_META_SCHEMA; readonly meta: { readonly path: string; readonly rpc: true; }; };",
+      "jsdocSummary": "Manifest declaration an {@link RpcMountDef } produces via `toDotAction()`."
+    },
+    {
+      "subpath": ".",
+      "name": "RpcBinding",
+      "kind": "type",
+      "signature": "export type RpcBinding = { /** Set by an adapter that watches this mount; see {@link ObserveBinding}. */ readonly observe?: ObserveBinding; readonly contract?: RpcMountContract; readonly stages?: readonly ErasedStage[]; readonly id: string; readonly path: string; readonly transport: MountTransport; readonly context: (req: Request, ctx: never) => unknown; readonly handle: (req: Request, ctx: never) => Response | Promise<Response>; };",
+      "jsdocSummary": "Erased rpc binding a bundle stores — same seam as {@link RouteBinding}."
+    },
+    {
+      "subpath": ".",
+      "name": "rpcMount",
+      "kind": "function",
+      "signature": "export declare function rpcMount<const Options extends RpcMountOptions>(path: MountPath, options: Options): RpcMountContract & Options;",
+      "jsdocSummary": "Declare the static half of an RPC mount. See {@link RpcMountContract}."
+    },
+    {
+      "subpath": ".",
+      "name": "RpcMountContract",
+      "kind": "type",
+      "signature": "export type RpcMountContract = { readonly kind: 'rpc-mount'; readonly failures?: readonly FailureDefinitionLike[]; /** Stable manifest id, e.g. 'orders.rpc'. */ readonly id: string; /** Path prefix the RPC handler owns, e.g. '/rpc/orders'. */ readonly path: string; readonly transport: MountTransport; readonly summary?: string; toDotAction(): RpcActionMeta; };",
+      "jsdocSummary": "The STATIC half of an RPC mount — pure data plus `toDotAction()`, so a feature plugin lists it in `actions:` at module level (declare-once), and binds `context`/`handle` in `boot` where its services exist (bind-once) — the exact contract/handler split `route.get(...)` uses."
+    },
+    {
+      "subpath": ".",
+      "name": "RpcMountHandlers",
+      "kind": "type",
+      "signature": "export type RpcMountHandlers<TDerived extends BaseRequestCtx, TRpcCtx> = { readonly context: (req: Request, ctx: TDerived) => TRpcCtx | Promise<TRpcCtx>; readonly handle: (req: Request, ctx: NoInfer<TRpcCtx>) => Response | Promise<Response>; };",
+      "jsdocSummary": "The boot-time half: a per-request context factory (receives the bundle's accumulated derived ctx, typed) and the dispatch — typically an oRPC `RPCHandler` or tRPC fetch adapter built once at boot."
+    },
+    {
+      "subpath": ".",
+      "name": "RpcMountOptions",
+      "kind": "type",
+      "signature": "export type RpcMountOptions = { readonly failures?: readonly FailureDefinitionLike[]; readonly id: string; /** Manifest binding name. Defaults to `'orpc'`. */ readonly transport?: MountTransport; readonly summary?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "SseContract",
+      "kind": "type",
+      "signature": "export type SseContract<TPath extends string = string, TDef extends SseDef<TPath> = SseDef<TPath>> = TDef & { readonly kind: 'sse'; readonly method: 'GET'; readonly path: TPath; toDotAction(): RouteMeta; };",
+      "jsdocSummary": "A typed server-sent-events contract. Create via {@link route.sse}. The bound handler is an async generator; every yielded value is validated against `event` and framed as an SSE `data:` message."
+    },
+    {
+      "subpath": ".",
+      "name": "SseDef",
+      "kind": "type",
+      "signature": "export type SseDef<TPath extends string> = Pick<RouteDef<TPath>, 'id' | 'summary' | 'params' | 'query' | 'headers' | 'check' | 'failures'> & { /** Schema every yielded event is encoded with. */ readonly event: Wire; /** Emit `:keepalive` comments at this interval. Off when omitted. */ readonly heartbeatMs?: number; };",
+      "jsdocSummary": "What a typed SSE route declares."
+    },
+    {
+      "subpath": ".",
+      "name": "SseHandler",
+      "kind": "type",
+      "signature": "export type SseHandler<TPath extends string, TDef extends SseDef<TPath>, TCtx extends BaseRequestCtx> = (input: RouteInput<TPath, TDef>, ctx: TCtx) => AsyncIterable<WireValue<TDef['event']>>;",
+      "jsdocSummary": "Handler signature inferred from an {@link SseContract}: an async iterable (usually an async generator) of events. Each yielded value is encoded with the contract's event schema and framed as an SSE `data:` message. Client disconnect aborts `ctx.signal` and terminates the iterator."
+    },
+    {
+      "subpath": ".",
+      "name": "step",
+      "kind": "function",
+      "signature": "export declare function step<In, R extends object | PromiseLike<object>>(fn: (context: In) => R, options?: FailureHeaders<R>): HttpStep<In, R>;",
+      "jsdocSummary": "Run a step before the handler: `routes().use(step(authed))`."
+    },
+    {
+      "subpath": ".",
+      "name": "toErrorResponse",
+      "kind": "function",
+      "signature": "export declare function toErrorResponse(error: unknown): Response;",
+      "jsdocSummary": "Map any thrown value to its wire envelope: {@link HttpError} keeps its status and fields; everything else is a redacted-in-production 500."
+    },
+    {
+      "subpath": ".",
+      "name": "toOpenApi",
+      "kind": "function",
+      "signature": "export declare function toOpenApi(contracts: readonly ContractLike[], info: OpenApiInfo): JsonObject;",
+      "jsdocSummary": "Render an OpenAPI 3.1 document from contracts. Paths and operations appear in contract order; duplicate method+path pairs fail loudly with `ARKI_HTTP_E002` (the same collision `buildEngine` rejects at boot)."
+    },
+    {
+      "subpath": ".",
+      "name": "ValueOf",
+      "kind": "type",
+      "signature": "export type ValueOf<TField extends Field> = TField extends Optional<infer TWire> ? WireValue<TWire> | undefined : TField extends Wire ? WireValue<TField> : never;",
+      "jsdocSummary": "The value of one field; an {@link optional} one may be `undefined`."
+    },
+    {
+      "subpath": ".",
+      "name": "Wire",
+      "kind": "type",
+      "signature": "export type Wire = StandardSchemaV1 | Codec;",
+      "jsdocSummary": "A bare schema (wire form = value form) or a {@link Codec}."
+    },
+    {
+      "subpath": ".",
+      "name": "WireValue",
+      "kind": "type",
+      "signature": "export type WireValue<TWire extends Wire> = SchemaOutput<DecoderOf<TWire>>;",
+      "jsdocSummary": "The value form of a wire: what the handler receives and the client resolves to."
+    },
+    {
+      "subpath": "./client",
+      "name": "ClientCall",
+      "kind": "type",
+      "signature": "export type ClientCall<TRoute> = NoInput extends ClientInput<TRoute> ? (input?: ClientInput<TRoute>, init?: CallInit) => Promise<ClientOutput<TRoute>> : (input: ClientInput<TRoute>, init?: CallInit) => Promise<ClientOutput<TRoute>>;",
+      "jsdocSummary": "One typed call. The input argument may be left out when nothing is required."
+    },
+    {
+      "subpath": "./client",
+      "name": "ClientInput",
+      "kind": "type",
+      "signature": "export type ClientInput<TRoute> = TRoute extends { readonly path: infer TPath extends string; } ? Flatten<ParamsInput<TPath, RouteInput<TPath, TRoute>['params']> & OptionalWhenEmpty<'query', RouteInput<TPath, TRoute>['query']> & OptionalWhenEmpty<'headers', RouteInput<TPath, TRoute>['headers']> & BodyInput<RouteInput<TPath, TRoute>['body']>> : never;",
+      "jsdocSummary": "What one client call takes: `params` when the path has parameters, and `query`, `headers` and `body` when the contract declares them. Each is the value form — the same values the server handler receives; a field marked `optional(...)` may be left out."
+    },
+    {
+      "subpath": "./client",
+      "name": "ClientOptions",
+      "kind": "type",
+      "signature": "export type ClientOptions = { /** Origin plus any path prefix, e.g. `https://api.example.com/v1`. A relative prefix (`/api`) works where fetch allows it. */ readonly baseUrl: string; /** * The fetch to use. Defaults to the global `fetch`. Wrap it to add auth headers. On a server that * calls URLs it does not fully control, pass `publicFetch()` from `@arki/http/public-fetch`. */ readonly fetch?: (input: string, init: RequestInit) => Promise<Response>; /** * Gives up once the response has not arrived within this many milliseconds, retries included, * and returns `RequestTimeout` (408). Reading the body is not timed. */ readonly timeoutMs?: number; /** * Runs each attempt, so it can retry and back off. Only an outcome `retryOn` accepts is retried; * any other answer or error leaves the policy at once, whatever the policy itself would retry. */ readonly policy?: ClientPolicy; /** Which outcomes `policy` retries. Default {@link retryTransient}. */ readonly retryOn?: (outcome: RetryOutcome) => boolean; };",
+      "jsdocSummary": "Options for {@link createClient}."
+    },
+    {
+      "subpath": "./client",
+      "name": "ClientOutput",
+      "kind": "type",
+      "signature": "export type ClientOutput<TRoute> = TRoute extends { readonly output: RawOutput; } ? Response | RouteFailure<TRoute> | HttpClientFailure : SuccessOf<TRoute> | StatusBodies<TRoute> | RouteFailure<TRoute> | HttpClientFailure;",
+      "jsdocSummary": "What one client call resolves to: the output's value form (`undefined` when the contract has no output, `Response` for `raw()`), the body of a status listed in `responses`, or one of the failures the contract lists."
+    },
+    {
+      "subpath": "./client",
+      "name": "ClientPolicy",
+      "kind": "type",
+      "signature": "export type ClientPolicy = PolicyExecution<never, ResilienceFailure>;",
+      "jsdocSummary": "What the client needs from a retry policy: an `@arki/resilience` policy fits. A policy with a fallback does not, because its result could be the fallback instead of a response."
+    },
+    {
+      "subpath": "./client",
+      "name": "createClient",
+      "kind": "function",
+      "signature": "export declare function createClient<TRoute extends AnyRoute>(contract: TRoute, options: ClientOptions): ClientCall<TRoute>; ; export declare function createClient<TRoutes extends Readonly<Record<string, AnyRoute>>>(contracts: TRoutes, options: ClientOptions): { readonly [K in keyof TRoutes]: ClientCall<TRoutes[K]>; };",
+      "jsdocSummary": "Build one typed call from a single contract. Build one typed call per contract, under the same keys."
+    },
+    {
+      "subpath": "./client",
+      "name": "HTTP_CLIENT_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const HTTP_CLIENT_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"schema.invalid_input\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { issues: readonly import(\"@standard-schema/spec\").StandardSchemaV1.Issue[]; }>>, import(\"@arki/failure\").FailureDefinition<\"failure.invalid_envelope\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { reason: (readonly [\"malformed\", \"unknown_code\", \"unsupported_version\", \"invalid_data\", \"non_json_data\", \"unstable_schema\", \"invalid_json\"])[number]; }>>, import(\"@arki/failure\").FailureDefinition<\"schema.async_required\", undefined>, import(\"@arki/failure\").FailureDefinition<\"schema.validator_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"resilience.circuit_open\", undefined>, import(\"@arki/failure\").FailureDefinition<\"resilience.bulkhead_rejected\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.network_failure\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_timeout\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./client",
+      "name": "HttpClientFailure",
+      "kind": "type",
+      "signature": "export type HttpClientFailure = ReturnType<(typeof HTTP_CLIENT_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./client",
+      "name": "NetworkFailure",
+      "kind": "variable",
+      "signature": "export declare const NetworkFailure: import(\"@arki/failure\").FailureDefinition<\"http.network_failure\", undefined>;",
+      "jsdocSummary": "A fetch attempt failed to reach its destination."
+    },
+    {
+      "subpath": "./client",
+      "name": "RequestCancelled",
+      "kind": "variable",
+      "signature": "export declare const RequestCancelled: import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>;",
+      "jsdocSummary": "The caller cancelled the request."
+    },
+    {
+      "subpath": "./client",
+      "name": "RequestTimeout",
+      "kind": "variable",
+      "signature": "export declare const RequestTimeout: import(\"@arki/failure\").FailureDefinition<\"http.request_timeout\", undefined>;",
+      "jsdocSummary": "The request did not receive a response before its deadline."
+    },
+    {
+      "subpath": "./client",
+      "name": "RetryOutcome",
+      "kind": "type",
+      "signature": "export type RetryOutcome = { readonly method: string; /** True for GET, HEAD, OPTIONS, PUT and DELETE, and for any request with an `idempotency-key` header. */ readonly repeatable: boolean; } & ({ readonly response: Response; readonly error?: never; } | { readonly error: unknown; readonly response?: never; });",
+      "jsdocSummary": "One attempt's outcome, as `retryOn` sees it: the response, or the error `fetch` threw."
+    },
+    {
+      "subpath": "./client",
+      "name": "retryTransient",
+      "kind": "function",
+      "signature": "export declare function retryTransient(outcome: RetryOutcome): boolean;",
+      "jsdocSummary": "The default `retryOn`: a network failure (`fetch` throws a `TypeError`) or a 408, 429, 502, 503 or 504, and only on a request that is safe to send twice. A POST without an idempotency key is never retried: the first try may have done the work before the answer was lost."
+    },
+    {
+      "subpath": "./context",
+      "name": "registerEngineContext",
+      "kind": "function",
+      "signature": "export declare function registerEngineContext(enabled: boolean): void;",
+      "jsdocSummary": "Engine seam: an engine was built; `enabled` says whether it runs requests inside the store."
+    },
+    {
+      "subpath": "./context",
+      "name": "requestContext",
+      "kind": "function",
+      "signature": "export declare function requestContext(): BaseRequestCtx | undefined;",
+      "jsdocSummary": "The context of the request currently being handled, or `undefined` outside a request (startup, background jobs, tests that call handlers directly)."
+    },
+    {
+      "subpath": "./context",
+      "name": "runWithRequestContext",
+      "kind": "function",
+      "signature": "export declare function runWithRequestContext<T>(ctx: BaseRequestCtx, fn: () => T): T;",
+      "jsdocSummary": "Engine seam: run `fn` with `ctx` as the ambient request context. Called by an engine built with `{ requestContext: true }` around every request — not part of the public surface."
+    },
+    {
+      "subpath": "./dot",
+      "name": "BundleNeeds",
+      "kind": "type",
+      "signature": "export type BundleNeeds<TBundles extends readonly BundleToken[]> = { readonly [Tok in TBundles[number] as Tok extends Token<RouteBundle, infer K> ? K : never]: RouteBundle; };",
+      "jsdocSummary": "Wire-needs record derived from the bundle tokens."
+    },
+    {
+      "subpath": "./dot",
+      "name": "BundleToken",
+      "kind": "type",
+      "signature": "export type BundleToken = Token<RouteBundle, string>;",
+      "jsdocSummary": "A token publishing a {@link RouteBundle} — what `options.bundles` lists."
+    },
+    {
+      "subpath": "./dot",
+      "name": "endpoints",
+      "kind": "function",
+      "signature": "export declare function endpoints<C extends AnyFeatureCore>(_core: C, build: (services: EntrypointServicesOf<C>) => RouteBundle, options?: { readonly contracts?: readonly ContractLike[]; }): EndpointsEntrypoint<EntrypointServicesOf<C>>;",
+      "jsdocSummary": "Declare a `defineFeature` feature's HTTP surface, in its `.entrypoints(...)`. `build` runs once, at the feature's boot, with what every entrypoint gets — the feature's `usecases` and its `entrypointOnly(...)` needs — typed from the core at any stage, so a routes file of its own needs no annotation:"
+    },
+    {
+      "subpath": "./dot",
+      "name": "EndpointsEntrypoint",
+      "kind": "type",
+      "signature": "export type EndpointsEntrypoint<TServices> = { readonly kind: 'routes'; readonly key: 'routes'; /** The route contracts, for the manifest and `dot explain` — known before anything boots. */ readonly actions: readonly ContractLike[]; readonly resolve: (services: TServices) => RouteBundle; };",
+      "jsdocSummary": "What `endpoints(core, build)` hands `.entrypoints(...)`: the feature's route bundle, built at its boot."
+    },
+    {
+      "subpath": "./dot",
+      "name": "http",
+      "kind": "function",
+      "signature": "export declare function http<const TBundles extends readonly BundleToken[] = readonly []>(options: HttpOptions<TBundles>): EntrypointBinder<BundleNeeds<TBundles>, HttpServices>;",
+      "jsdocSummary": "The HTTP entrypoint. `.entrypoints(http(...))` binds it to the app's features; it serves the listed bundles plus every feature's `routes` slice. See the module docs for the composition pattern and lifecycle."
+    },
+    {
+      "subpath": "./dot",
+      "name": "HTTP_PLUGIN_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const HTTP_PLUGIN_ERROR_CODES: { /** * A bundle token service was missing from the boot context (erased composition only). * * @fix Provide the service in the plugin that the route bundle needs. * @verify bun run test -- src/tests/bundle.test.ts */ readonly bundleMissing: 'ARKI_HTTP_E008'; /** * A feature `routes` slice is not a route bundle (a hand-made slice, not `endpoints()`). * * @fix Build the slice with `endpoints()`. * @verify bun run test -- src/tests/dot.test.ts */ readonly routesSliceInvalid: 'ARKI_HTTP_E010'; };",
+      "jsdocSummary": "Stable error codes thrown by the http plugin beyond the engine's own. Exported so consumers and coding agents can match against them."
+    },
+    {
+      "subpath": "./dot",
+      "name": "HttpOptions",
+      "kind": "type",
+      "signature": "export type HttpOptions<TBundles extends readonly BundleToken[] = readonly []> = { /** * Port to listen on in `start`. `0` picks an ephemeral port. Pass a * THUNK to defer the read to `start` — declarations stay import-pure * (no env observation at module load), e.g. `http({ port: () => env.PORT })`. * * Unlike `kv()`, the whole options object cannot be thunked here: * `bundles` is declaration-time wiring (it shapes the adapter's needs), * so only runtime settings like `port` defer. */ readonly port: Deferred<number>; readonly hostname?: string; /** * Bundle tokens to serve, in route-table order, ahead of the features' * routes. For bundles published as plain token services, not by a * feature. Each becomes a `needs` entry — the wiring guard rejects the * composition unless an earlier unit publishes it. */ readonly bundles?: TBundles; /** * App-wide fetch-shaped middleware (first = outermost): CORS, request * logging, compression. For per-request values use bundle steps — * they are typed into handler contexts; middleware is not. */ readonly middleware?: readonly HttpMiddleware[]; /** * Run every request inside the ambient store so `requestContext()` * (`@arki/http/context`) works. Off by default; it costs every request. */ readonly requestContext?: boolean; /** Milliseconds `stop` waits for in-flight requests. Default 10 000. */ readonly drainTimeoutMs?: number; /** * Where a feature INSTANCE's routes live (`feature.instance('eu', …)`): * `(instance, path)` maps a route, mount or rpc path written once in the * feature to the path served for that copy. Default puts the copy under * `/<instance>` (`GET /reports` -> `GET /eu/reports`; `/` -> `/eu`). * Plain features are never rewritten. */ readonly instancePath?: (instance: string, path: string) => string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "HttpServer",
+      "kind": "type",
+      "signature": "export type HttpServer = { readonly fetch: (req: Request) => Promise<Response>; port(): number | undefined; url(): string | undefined; /** Requests currently being handled (streams count until their handler returns). */ inflight(): number; };",
+      "jsdocSummary": "The service the `http()` plugin publishes. `fetch` is the composed handler — also the unit-test seam: call the app without a socket. `port`/`url` are defined once the app has started."
+    },
+    {
+      "subpath": "./dot",
+      "name": "HttpServices",
+      "kind": "type",
+      "signature": "export type HttpServices = { readonly httpServer: HttpServer; };",
+      "jsdocSummary": "Services published by the http adapter."
+    },
+    {
+      "subpath": "./dot",
+      "name": "registerRoutes",
+      "kind": "function",
+      "signature": "export declare function registerRoutes(ctx: DotConfigureContext, contracts: readonly ContractLike[]): void;",
+      "jsdocSummary": "Deprecated shim for registering contracts from a feature plugin's `configure` hook. Prefer declaring contracts directly in `actions: [...]` on the plugin. Converts contract schemas to JSON Schema once, at configure time, so `dot explain --as openapi` renders without booting:"
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "BeginResult",
+      "kind": "type",
+      "signature": "export type BeginResult = /** This request owns the key and must call `finish` or `abandon`. */ 'started' /** A finished request holds the key with the same fingerprint. Answer with `replay`. */ | { readonly replay: StoredResponse; } /** Another request holds the key and has not finished. */ | 'in-progress' /** The key is held by a request with a different fingerprint. */ | 'conflict';",
+      "jsdocSummary": "What `begin` found for a key."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IDEMPOTENCY_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const IDEMPOTENCY_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_required\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_reused\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_in_progress\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_claim_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_replay_invalid\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_write_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_ownership_lost\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_response_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_too_large\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_unreadable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_hash_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyClaimUnconfirmed",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyClaimUnconfirmed: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_claim_unconfirmed\", undefined>;",
+      "jsdocSummary": "Cache acquisition did not confirm whether this request owns the key."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyHashUnavailable",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyHashUnavailable: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_hash_unavailable\", undefined>;",
+      "jsdocSummary": "The runtime cannot securely fingerprint a protected request."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyInProgress",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyInProgress: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_in_progress\", undefined>;",
+      "jsdocSummary": "The original protected write is still running."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyKeyRequired",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyKeyRequired: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_required\", undefined>;",
+      "jsdocSummary": "A protected write has no valid idempotency key."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyKeyReused",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyKeyReused: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_key_reused\", undefined>;",
+      "jsdocSummary": "The key identifies a different request."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "idempotencyOwnerId",
+      "kind": "variable",
+      "signature": "export declare const idempotencyOwnerId: import(\"@arki/contracts\").BrandedIdDeclaration<\"\", \"http.idempotency-owner\">;",
+      "jsdocSummary": "One acquisition of an HTTP idempotency key, distinct from request correlation."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyOwnerId",
+      "kind": "type",
+      "signature": "export type IdempotencyOwnerId = IdOf<typeof idempotencyOwnerId>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyOwnershipLost",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyOwnershipLost: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_ownership_lost\", undefined>;",
+      "jsdocSummary": "The expected owner cannot persist a response."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyReleaseUnconfirmed",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyReleaseUnconfirmed: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_release_unconfirmed\", undefined>;",
+      "jsdocSummary": "Release of a reconciled reservation was not confirmed."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyReplayInvalid",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyReplayInvalid: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_replay_invalid\", undefined>;",
+      "jsdocSummary": "Persisted replay data cannot be safely reconstructed."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyRequestTooLarge",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyRequestTooLarge: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_too_large\", undefined>;",
+      "jsdocSummary": "The request cannot be fingerprinted within the configured bound."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyRequestUnreadable",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyRequestUnreadable: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_request_unreadable\", undefined>;",
+      "jsdocSummary": "Request bytes could not be read before idempotency ownership or application work."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyResponseUnavailable",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyResponseUnavailable: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_response_unavailable\", undefined>;",
+      "jsdocSummary": "Application work ran but its response cannot be stored for replay."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotencyWriteUnconfirmed",
+      "kind": "variable",
+      "signature": "export declare const IdempotencyWriteUnconfirmed: import(\"@arki/failure\").FailureDefinition<\"http.idempotency_write_unconfirmed\", undefined>;",
+      "jsdocSummary": "Application work ran but persistence of its response is unconfirmed."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "idempotent",
+      "kind": "function",
+      "signature": "export declare function idempotent<const Routes extends readonly ContractLike[], ScopeResult extends string | undefined | Failure = string | undefined>(options: IdempotentOptions<Routes, ScopeResult> & { readonly routes: { readonly [Key in keyof Routes]: Routes[Key] & CoversFailures<NoInfer<Routes[Key]>, ReturnType<(typeof IDEMPOTENCY_FAILURES)[number]> | NoInfer<Extract<ScopeResult, Failure>>>; }; }): HttpMiddleware;",
+      "jsdocSummary": "Run each listed request once per key while its reservation/replay is retained. Configure after authentication and CORS. Pending claims never expire. Every bounded response, including 5xx/409/429, is stored; the replay TTL starts at confirmed persistence. After handler dispatch, no status, exception or cache fault proves repetition safe. The middleware never abandons that reservation. Unreplayable responses return a typed failure; reconciliation must determine the application outcome before an operator releases the key. Oversized requests are refused before execution. Store loss and replay expiry are outside this cache's protection; use transactional business receipts for durable idempotency."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "IdempotentOptions",
+      "kind": "type",
+      "signature": "export type IdempotentOptions<Routes extends readonly ContractLike[] = readonly ContractLike[], ScopeResult extends string | undefined | Failure = string | undefined> = { readonly cache: ResponseCache; /** * Who is asking: a user id, a tenant plus user, an API key id. Runs for each listed request. * Return `undefined` for an unauthenticated request: it skips the cache entirely, so it never * replays, and the handler's own authentication answers it. The key is scoped by this value, * so two callers can use the same key without meeting. Returned canonical failures stop * execution; every listed route must declare their inferred definitions. Observe `req.signal` * to stop pending work when the request is cancelled. */ readonly scope: (req: Request) => ScopeResult | Promise<ScopeResult>; /** Canonical route descriptors; each must list every IDEMPOTENCY_FAILURES definition. Paths include any mount prefix. */ readonly routes: Routes; /** Default `Idempotency-Key`. */ readonly header?: string; /** Replay retention after confirmed finish, in milliseconds. Pending reservations do not expire. */ readonly ttl: number; /** Default 1 MiB. Larger requests are refused; larger responses retain an unresolved reservation. */ readonly maxBodyBytes?: number; /** Response headers a replay carries, lower case. Default `content-type`, `location`, `etag`. */ readonly replayHeaders?: readonly string[]; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "RESPONSE_CACHE_ABANDON_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const RESPONSE_CACHE_ABANDON_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_release_unconfirmed\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "RESPONSE_CACHE_BEGIN_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const RESPONSE_CACHE_BEGIN_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_claim_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_replay_invalid\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "RESPONSE_CACHE_FINISH_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const RESPONSE_CACHE_FINISH_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.idempotency_write_unconfirmed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.idempotency_ownership_lost\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "ResponseCache",
+      "kind": "type",
+      "signature": "export type ResponseCache = { begin(key: string, fingerprint: string, owner: IdempotencyOwnerId): Promise<BeginResult | ReturnType<(typeof RESPONSE_CACHE_BEGIN_FAILURES)[number]>>; /** Persist the response and start replay retention (milliseconds). Confirm ownership or return its failure. */ finish(key: string, owner: IdempotencyOwnerId, response: StoredResponse, ttl: number): Promise<void | ReturnType<(typeof RESPONSE_CACHE_FINISH_FAILURES)[number]>>; /** Release only after reconciliation proves repetition safe. A no-op for an absent/different owner. */ abandon(key: string, owner: IdempotencyOwnerId): Promise<void | ReturnType<(typeof RESPONSE_CACHE_ABANDON_FAILURES)[number]>>; };",
+      "jsdocSummary": "Where responses wait for a repeat. Every method is atomic in the store. `owner` is a token that is unique per request. Unresolved reservations MUST NOT expire: elapsed time does not prove application work never happened. `ttl` starts only when `finish` persists the replay. Only reconciled operations may be abandoned. Store loss/eviction breaks this guarantee; durable application receipts remain necessary for atomic business idempotency."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "storedResponse",
+      "kind": "variable",
+      "signature": "export declare const storedResponse: StandardSchemaV1<StoredResponse>;",
+      "jsdocSummary": "Checks a {@link StoredResponse} read back from a cache: `parse(storedResponse, value)` from `@arki/schema`."
+    },
+    {
+      "subpath": "./idempotency",
+      "name": "StoredResponse",
+      "kind": "type",
+      "signature": "export type StoredResponse = { status: number; headers: Record<string, string>; body: string; };",
+      "jsdocSummary": "A response as the cache keeps it. An exact type test locks `storedResponseSchema` to this type."
+    },
+    {
+      "subpath": "./projection",
+      "name": "project",
+      "kind": "function",
+      "signature": "export declare function project(manifest: Parameters<typeof toOpenApiFromManifest>[0]): JsonObject;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "FETCH_ALLOW_HOSTS_ENV",
+      "kind": "variable",
+      "signature": "export declare const FETCH_ALLOW_HOSTS_ENV = \"FETCH_ALLOW_HOSTS\";",
+      "jsdocSummary": "The env variable that lists hosts the guard lets through even at a private address (tests only)."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "fetchAllowedHosts",
+      "kind": "function",
+      "signature": "export declare function fetchAllowedHosts(env?: Readonly<Record<string, string | undefined>>): ReadonlySet<string>;",
+      "jsdocSummary": "Hosts (`host:port`, comma separated, from `FETCH_ALLOW_HOSTS`) that skip the private-address checks. It exists so an end-to-end test can fetch from a feed server on the same machine. It throws in production, so a misset variable can never open the guard; call it at boot to fail early. Only the exact `host:port` listed is allowed; every other private address is still refused."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "isPublicAddress",
+      "kind": "function",
+      "signature": "export declare function isPublicAddress(address: string): boolean;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "NetworkFailure",
+      "kind": "variable",
+      "signature": "export declare const NetworkFailure: import(\"@arki/failure\").FailureDefinition<\"http.network_failure\", undefined>;",
+      "jsdocSummary": "A fetch attempt failed to reach its destination."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "PUBLIC_FETCH_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const PUBLIC_FETCH_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.unsafe_url\", import(\"@standard-schema/spec\").StandardSchemaV1<{ reason: \"invalid_url\" | \"private_address\" | \"scheme_or_credentials\"; }, { reason: \"invalid_url\" | \"private_address\" | \"scheme_or_credentials\"; }>>, import(\"@arki/failure\").FailureDefinition<\"http.redirect_limit\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.response_too_large\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.network_failure\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_timeout\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>];",
+      "jsdocSummary": "Every outcome of a public fetch except success."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "publicFetch",
+      "kind": "function",
+      "signature": "export declare function publicFetch(options?: { maxBytes?: number; timeoutMs?: number; transport?: PublicFetchTransport; }): (input: string, init?: RequestInit) => Promise<Response>;",
+      "jsdocSummary": "A `fetch` that reaches public addresses only, for server code that calls URLs it does not fully control: `createClient(contracts, { baseUrl, fetch: publicFetch() })`. Each hop is resolved, checked and pinned, as in {@link safeFetchBytes}; a private address or a redirect to one is refused."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "PublicFetchFailure",
+      "kind": "type",
+      "signature": "export type PublicFetchFailure = ReturnType<typeof UnsafeUrl> | ReturnType<typeof RedirectLimit> | ReturnType<typeof ResponseTooLarge> | ReturnType<typeof NetworkFailure> | ReturnType<typeof RequestTimeout> | ReturnType<typeof RequestCancelled>;",
+      "jsdocSummary": "Every outcome of a public fetch except success."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "PublicFetchResult",
+      "kind": "type",
+      "signature": "export type PublicFetchResult = { readonly bytes: Uint8Array; readonly status: number; readonly headers: Headers; readonly url: string; };",
+      "jsdocSummary": "A completed public fetch: the whole body, the final status and headers, and the final URL."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "PublicFetchTransport",
+      "kind": "type",
+      "signature": "export type PublicFetchTransport = { lookup: (hostname: string) => Promise<readonly { address: string; family: number; }[]>; fetch: typeof undiciFetch; };",
+      "jsdocSummary": "The two network calls a public fetch makes. Production uses the system resolver and undici; a test passes fakes here and every address check (literal IP, DNS answer, each redirect hop) still runs for real."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "RedirectLimit",
+      "kind": "variable",
+      "signature": "export declare const RedirectLimit: import(\"@arki/failure\").FailureDefinition<\"http.redirect_limit\", undefined>;",
+      "jsdocSummary": "A public fetch followed more redirects than it allows (five)."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "RequestCancelled",
+      "kind": "variable",
+      "signature": "export declare const RequestCancelled: import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>;",
+      "jsdocSummary": "The caller cancelled the request."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "RequestTimeout",
+      "kind": "variable",
+      "signature": "export declare const RequestTimeout: import(\"@arki/failure\").FailureDefinition<\"http.request_timeout\", undefined>;",
+      "jsdocSummary": "The request did not receive a response before its deadline."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "ResponseTooLarge",
+      "kind": "variable",
+      "signature": "export declare const ResponseTooLarge: import(\"@arki/failure\").FailureDefinition<\"http.response_too_large\", undefined>;",
+      "jsdocSummary": "A public fetch response body was larger than `maxBytes`."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "safeFetchBytes",
+      "kind": "function",
+      "signature": "export declare function safeFetchBytes(value: string, options?: { maxBytes?: number; headers?: Record<string, string>; timeoutMs?: number; method?: string; body?: string; /** Accept `user:pass@` in `value`; it is stripped from the request URL and sent as a Basic `Authorization` header. */ allowCredentials?: boolean; transport?: PublicFetchTransport; }): Promise<PublicFetchResult | PublicFetchFailure>;",
+      "jsdocSummary": "Fetch `value` through the guard and return the whole body, or a failure from {@link PublicFetchFailure}: a refused URL, too many redirects, a body over `maxBytes`, a network error, a timeout or a cancellation. It never throws for those outcomes."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "systemTransport",
+      "kind": "variable",
+      "signature": "export declare const systemTransport: PublicFetchTransport;",
+      "jsdocSummary": "The system resolver and undici, loaded on first use: this module's top level has no `node:` import, so the pure checks (`validatePublicURL`) also load in a browser bundle that shares a schema with the server."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "UnsafeUrl",
+      "kind": "variable",
+      "signature": "export declare const UnsafeUrl: import(\"@arki/failure\").FailureDefinition<\"http.unsafe_url\", import(\"@standard-schema/spec\").StandardSchemaV1<{ reason: \"invalid_url\" | \"private_address\" | \"scheme_or_credentials\"; }, { reason: \"invalid_url\" | \"private_address\" | \"scheme_or_credentials\"; }>>;",
+      "jsdocSummary": "`@arki/http/public-fetch` refused a URL: a bad scheme, refused credentials, or a private, loopback or link-local address (also after DNS or a redirect). The message never carries the URL."
+    },
+    {
+      "subpath": "./public-fetch",
+      "name": "validatePublicURL",
+      "kind": "function",
+      "signature": "export declare function validatePublicURL(value: string, options?: { allowCredentials?: boolean; }): URL | ReturnType<typeof UnsafeUrl>;",
+      "jsdocSummary": "The URL must be http(s) at a public address. `user:pass@` is refused unless `allowCredentials` is set (private feeds use it; `safeFetchBytes` then sends it as a Basic `Authorization` header). A refusal returns {@link UnsafeUrl}, whose message never carries the URL itself."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "hmac",
+      "kind": "function",
+      "signature": "export declare function hmac(options: HmacSchemeOptions): WebhookScheme<string>;",
+      "jsdocSummary": "Any HMAC scheme not covered above: GitHub, Slack, Shopify and most others."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "HmacSchemeOptions",
+      "kind": "type",
+      "signature": "export type HmacSchemeOptions = { readonly secrets: readonly string[]; /** The header that carries the signature, such as `x-hub-signature-256`. */ readonly header: string; /** Text before the signature in its header, such as GitHub's `sha256=`. Default none. */ readonly headerPrefix?: string; /** Default `SHA-256`. */ readonly algorithm?: WebhookAlgorithm; /** Default `hex`. */ readonly encoding?: WebhookEncoding; /** * The header that carries the event id, for senders that sign it through `bodyPrefix`. Required on * the request when set. It never becomes `webhook.id`: see {@link hmac}. */ readonly idHeader?: string; /** * The header that carries the send time in Unix seconds. Required on the request when set, and * checked against the tolerance. Only a signed time stops replays, so put it in `bodyPrefix`. */ readonly timestampHeader?: string; /** * The text signed before the body, such as Slack's `({ timestamp }) => \\`v0:${timestamp}:\\``. * `id` and `timestamp` are empty strings when their header is not set. Default: the body alone. */ readonly bodyPrefix?: (parts: { readonly id: string; readonly timestamp: string; }) => string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "HTTP_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const HTTP_ERROR_CODES: { /** * `start` could not bind the port. * * @fix Free the port, or pass another `port`. The error `cause` names the system error. * @verify bun run test -- src/tests/engine.test.ts */ readonly listenFailed: 'ARKI_HTTP_E001'; /** * Two bindings claim the same method and path, or a bundle token is listed twice. * * @fix Remove one binding. Each method and path is bound once. * @verify bun run test -- src/tests/engine.test.ts */ readonly duplicateRoute: 'ARKI_HTTP_E002'; /** * `stop` exceeded `drainTimeoutMs` with requests still in flight. * * @fix Raise `drainTimeoutMs`, or shorten the slow handlers. Check that handlers honour the abort signal. * @verify bun run test -- src/tests/engine.test.ts */ readonly drainTimeout: 'ARKI_HTTP_E005'; /** * A mount path is malformed. * * @fix Use a path that starts with `/` and has no query or fragment. * @verify bun run test -- src/tests/engine.test.ts */ readonly invalidMount: 'ARKI_HTTP_E006'; /** * `requestContext()` was called, but every engine in this process was built without `requestContext: true`. * * @fix Pass `{ requestContext: true }` to `buildEngine` or `buildHonoEngine` (or `requestContext: true` to `http()`), or read the explicit `ctx` instead. * @verify bun run test -- src/tests/context.test.ts */ readonly requestContextDisabled: 'ARKI_HTTP_E014'; /** * A Dot HTTP action carries missing or incompatible projection metadata. * * @fix Build the action with the route helpers, not by hand, so its metadata is complete. * @verify bun run test -- src/tests/dot.test.ts */ readonly invalidActionMeta: 'ARKI_HTTP_E009'; /** * A route contract is inconsistent: params, headers or responses do not fit its path or each other. Thrown at declaration. * * @fix Make the params schema match the `:name` segments of the path, and declare each response status once. * @verify bun run test -- src/tests/contract.test.ts */ readonly invalidContract: 'ARKI_HTTP_E011'; /** * A webhook scheme has no secrets, an empty secret, or a secret it cannot decode. Thrown when the scheme is created. * * @fix Pass at least one non-empty secret in the format the scheme expects. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly invalidWebhookScheme: 'ARKI_HTTP_E012'; /** * A contract schema cannot describe itself as JSON Schema (OpenAPI, manifest). Thrown by `contractMeta` and `toOpenApi`. * * @fix Wrap the schema with `withJsonSchema`, or use a schema library that supports Standard JSON Schema. * @verify bun run test -- src/tests/openapi.test.ts */ readonly noJsonSchema: 'ARKI_HTTP_E013'; /** * Request validation failed (params, headers, query or body), or the body is not valid JSON. Answers 400. * * @fix Send a request that matches the contract. The error `issues` list each failing field. * @verify bun run test -- src/tests/engine.test.ts */ readonly badRequest: 'ARKI_HTTP_E400'; /** * A route that needs an idempotency key got none, or an unusable one. Answers 400. * * @fix Send an `Idempotency-Key` header with a unique value per logical action. * @verify bun run test -- src/tests/idempotency.test.ts */ readonly idempotencyKeyMissing: 'ARKI_HTTP_E410'; /** * An idempotency key was reused with a different method, path, query or body. Answers 422. * * @fix Use a new key for a new request. Reuse a key only to repeat the same request. * @verify bun run test -- src/tests/idempotency.test.ts */ readonly idempotencyKeyReused: 'ARKI_HTTP_E411'; /** * A request with this idempotency key is still running. Answers 409 with `retry-after`. * * @fix Wait for `retry-after` seconds, then send the same request with the same key. * @verify bun run test -- src/tests/idempotency.test.ts */ readonly idempotencyInProgress: 'ARKI_HTTP_E412'; /** * A request body is larger than the route allows. Answers 413. * * @fix Send a smaller body, or raise the body limit of the webhook scheme or route. * @verify bun run test -- src/tests/engine.test.ts */ readonly payloadTooLarge: 'ARKI_HTTP_E413'; /** * A client call ran past its `timeoutMs`. Thrown by `@arki/http/client`; never sent on the wire. * * @fix Raise `timeoutMs`, or retry. Retries are safe only for idempotent calls. * @verify bun run test -- src/tests/client-retry.test.ts */ readonly requestTimeout: 'ARKI_HTTP_E408'; /** * A webhook signature header is missing or malformed. Answers 401. * * @fix Send the signature headers the scheme expects. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly webhookMalformed: 'ARKI_HTTP_E420'; /** * No webhook signature matches the body with any of the secrets. Answers 401. * * @fix Check the secret, and that the body reaches the handler unchanged. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly webhookSignatureMismatch: 'ARKI_HTTP_E421'; /** * A webhook signed time is too far from now: a replay, or a clock far off. Answers 401. * * @fix Fix the sender or server clock, or widen the time window. * @verify bun run test -- src/tests/webhooks.test.ts */ readonly webhookStale: 'ARKI_HTTP_E422'; /** * A step rejected the request credentials. * * @fix Send valid credentials. * @verify bun run test -- src/tests/engine.test.ts */ readonly unauthorized: 'ARKI_HTTP_E401'; /** * A step rejected the request permissions. * * @fix Use an account that has the permission. * @verify bun run test -- src/tests/engine.test.ts */ readonly forbidden: 'ARKI_HTTP_E403'; /** * No route matches the request. Answers 404. * * @fix Check the method and path against the contract. * @verify bun run test -- src/tests/engine.test.ts */ readonly notFound: 'ARKI_HTTP_E404'; /** * Handler crash or output-schema violation. Answers 500. * * @fix Read the server log. Fix the handler, or make its output match the contract. * @verify bun run test -- src/tests/engine.test.ts */ readonly internal: 'ARKI_HTTP_E500'; /** * A handler returned a `Response` without `output: raw()`, or a value from a `raw()` route. Answers 500. * * @fix Declare `output: raw()` for a handler that returns a `Response`, and return a `Response` from it. * @verify bun run test -- src/tests/failures.test.ts */ readonly rawResponseMismatch: 'ARKI_HTTP_E510'; /** * A handler result does not fit its contract: undeclared status, malformed `reply`, or a value on a no-output route. Answers 500. * * @fix Return only the statuses the contract declares. * @verify bun run test -- src/tests/failures.test.ts */ readonly invalidResponse: 'ARKI_HTTP_E511'; };",
+      "jsdocSummary": "Stable error codes for `@arki/http`. `E0NN` codes surface through the DOT lifecycle (boot/start/stop failures); `E4xx`/`E5xx` codes surface on the wire in the error envelope. The digits of a wire code name the kind of failure; they are not always the HTTP status (`E510` and `E511` answer 500)."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "HttpConfigError",
+      "kind": "class",
+      "signature": "export declare class HttpConfigError extends Error { readonly code: string; readonly remediation: string; readonly docsUrl: string; constructor(fields: { readonly code: string; readonly message: string; readonly remediation: string; readonly docsUrl?: string; readonly cause?: unknown; }); }",
+      "jsdocSummary": "A composition or lifecycle failure. Carries the same code/remediation/ docsUrl fields the DOT kernel propagates into diagnostics when a hook throws."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "HttpError",
+      "kind": "class",
+      "signature": "export declare class HttpError extends Error { readonly status: number; readonly code: string; readonly remediation: string | undefined; readonly docsUrl: string | undefined; /** Extra response headers — e.g. `www-authenticate` on a 401, `retry-after` on a 429. */ readonly headers: Readonly<Record<string, string>> | undefined; readonly data: unknown; constructor(status: number, code: string, message: string, options?: { readonly remediation?: string; readonly docsUrl?: string; readonly headers?: Readonly<Record<string, string>>; readonly cause?: unknown; readonly data?: unknown; }); }",
+      "jsdocSummary": "A per-request failure with an HTTP status and a stable code. Throw from a handler or step to short-circuit into the wire envelope:"
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "SignOptions",
+      "kind": "type",
+      "signature": "export type SignOptions = { /** The event id, for schemes that carry one. Default: a random UUID. */ readonly id?: string; /** The send time in Unix seconds. Default: now. */ readonly timestamp?: number; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "standardWebhooks",
+      "kind": "function",
+      "signature": "export declare function standardWebhooks(options: { readonly secrets: readonly string[]; }): WebhookScheme<string>;",
+      "jsdocSummary": "[Standard Webhooks](https://www.standardwebhooks.com/): `webhook-id`, `webhook-timestamp` and `webhook-signature: v1,<base64>` (several, space-separated). Secrets are base64, with or without the `whsec_` prefix. Only `v1` (HMAC-SHA256) signatures are read."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "stripe",
+      "kind": "function",
+      "signature": "export declare function stripe(options: { readonly secrets: readonly string[]; }): WebhookScheme;",
+      "jsdocSummary": "Stripe: `stripe-signature: t=<seconds>,v1=<hex>[,v1=<hex>]` over `${t}.${body}`. Stripe sends one `v1` per secret it holds while you roll a secret; any one may match. The id is the event's `id` field, read from the body."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "VerifiedWebhook",
+      "kind": "type",
+      "signature": "export type VerifiedWebhook<TId extends string | undefined = string | undefined> = { /** The sender's id for this event, when the scheme carries one. Use it as the journal idempotency key. */ readonly id: TId; /** When the sender signed it, in Unix seconds, when the scheme signs a time. */ readonly timestamp: number | undefined; /** The exact bytes that were signed. */ readonly body: Uint8Array<ArrayBuffer>; };",
+      "jsdocSummary": "A webhook whose signature matched one of the secrets. `TId` is `string` for schemes that always carry an id."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "VerifyOptions",
+      "kind": "type",
+      "signature": "export type VerifyOptions = { /** How far the signed time may be from now, either way, in seconds. Default 300. */ readonly tolerance?: number; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "verifyWebhook",
+      "kind": "function",
+      "signature": "export declare function verifyWebhook<TId extends string | undefined>(options: VerifyWebhookOptions<TId>): (ctx: { readonly req: Request; }) => Promise<{ readonly webhook: VerifiedWebhook<TId>; } | WebhookFailure>;",
+      "jsdocSummary": "A step that checks the request's signature and adds `webhook` to the context: `routes().use(step(verifyWebhook({ scheme })))`. It reads a clone of the body, so the route's `body` schema still parses the same bytes after it. A request that fails never reaches the handler: 401 (or 413 when the body is too large)."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "VerifyWebhookOptions",
+      "kind": "type",
+      "signature": "export type VerifyWebhookOptions<TId extends string | undefined = string | undefined> = VerifyOptions & { readonly scheme: WebhookScheme<TId>; /** A body larger than this is refused with 413 before any check. Default 1 MiB. */ readonly maxBodyBytes?: number; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WEBHOOK_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const WEBHOOK_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.webhook_malformed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_signature_mismatch\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_stale\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_crypto_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_body_too_large\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_body_unreadable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.request_cancelled\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WEBHOOK_SIGN_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const WEBHOOK_SIGN_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.webhook_crypto_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WEBHOOK_VERIFY_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const WEBHOOK_VERIFY_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"http.webhook_malformed\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_signature_mismatch\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_stale\", undefined>, import(\"@arki/failure\").FailureDefinition<\"http.webhook_crypto_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookAlgorithm",
+      "kind": "type",
+      "signature": "export type WebhookAlgorithm = 'SHA-1' | 'SHA-256' | 'SHA-512';",
+      "jsdocSummary": "The hash behind the HMAC."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookBodyTooLarge",
+      "kind": "variable",
+      "signature": "export declare const WebhookBodyTooLarge: import(\"@arki/failure\").FailureDefinition<\"http.webhook_body_too_large\", undefined>;",
+      "jsdocSummary": "The webhook body exceeds the configured limit."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookBodyUnreadable",
+      "kind": "variable",
+      "signature": "export declare const WebhookBodyUnreadable: import(\"@arki/failure\").FailureDefinition<\"http.webhook_body_unreadable\", undefined>;",
+      "jsdocSummary": "The webhook request body could not be read."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookCryptoUnavailable",
+      "kind": "variable",
+      "signature": "export declare const WebhookCryptoUnavailable: import(\"@arki/failure\").FailureDefinition<\"http.webhook_crypto_unavailable\", undefined>;",
+      "jsdocSummary": "Required Web Crypto operations are unavailable."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "webhookDeliveryId",
+      "kind": "variable",
+      "signature": "export declare const webhookDeliveryId: import(\"@arki/contracts\").BrandedIdDeclaration<\"\", \"http.webhook.delivery\">;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookDeliveryId",
+      "kind": "type",
+      "signature": "export type WebhookDeliveryId = IdOf<typeof webhookDeliveryId>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookEncoding",
+      "kind": "type",
+      "signature": "export type WebhookEncoding = 'hex' | 'base64';",
+      "jsdocSummary": "How a signature is written in its header."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookFailure",
+      "kind": "type",
+      "signature": "export type WebhookFailure = ReturnType<(typeof WEBHOOK_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookMalformed",
+      "kind": "variable",
+      "signature": "export declare const WebhookMalformed: import(\"@arki/failure\").FailureDefinition<\"http.webhook_malformed\", undefined>;",
+      "jsdocSummary": "Required webhook signature headers or signed time are malformed."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookMessage",
+      "kind": "type",
+      "signature": "export type WebhookMessage = { readonly headers: Headers; readonly body: Uint8Array<ArrayBuffer>; };",
+      "jsdocSummary": "A request to check: its headers and the exact bytes of its body."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookScheme",
+      "kind": "type",
+      "signature": "export type WebhookScheme<TId extends string | undefined = string | undefined> = { /** Resolves when a signature matches and the signed time is within tolerance. Returns the exact canonical verification failure otherwise. */ readonly verify: (message: WebhookMessage, options?: VerifyOptions) => Promise<VerifiedWebhook<TId> | WebhookVerifyFailure>; /** The headers a sender adds to `body`, signed with the first secret. */ readonly sign: (body: Uint8Array<ArrayBuffer> | string, options?: SignOptions) => Promise<Headers | WebhookSignFailure>; };",
+      "jsdocSummary": "One way of signing webhooks: how to check a request, and how a sender signs one."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookSignatureMismatch",
+      "kind": "variable",
+      "signature": "export declare const WebhookSignatureMismatch: import(\"@arki/failure\").FailureDefinition<\"http.webhook_signature_mismatch\", undefined>;",
+      "jsdocSummary": "No webhook signature authenticates the supplied body."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookSignFailure",
+      "kind": "type",
+      "signature": "export type WebhookSignFailure = ReturnType<(typeof WEBHOOK_SIGN_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookStale",
+      "kind": "variable",
+      "signature": "export declare const WebhookStale: import(\"@arki/failure\").FailureDefinition<\"http.webhook_stale\", undefined>;",
+      "jsdocSummary": "The authenticated webhook time is outside the allowed window."
+    },
+    {
+      "subpath": "./webhooks",
+      "name": "WebhookVerifyFailure",
+      "kind": "type",
+      "signature": "export type WebhookVerifyFailure = ReturnType<(typeof WEBHOOK_VERIFY_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    }
+  ],
+  "groups": [],
+  "errorCodes": [
+    "ARKI_HTTP_E001",
+    "ARKI_HTTP_E002",
+    "ARKI_HTTP_E005",
+    "ARKI_HTTP_E006",
+    "ARKI_HTTP_E008",
+    "ARKI_HTTP_E009",
+    "ARKI_HTTP_E010",
+    "ARKI_HTTP_E011",
+    "ARKI_HTTP_E012",
+    "ARKI_HTTP_E013",
+    "ARKI_HTTP_E014",
+    "ARKI_HTTP_E400",
+    "ARKI_HTTP_E401",
+    "ARKI_HTTP_E403",
+    "ARKI_HTTP_E404",
+    "ARKI_HTTP_E408",
+    "ARKI_HTTP_E410",
+    "ARKI_HTTP_E411",
+    "ARKI_HTTP_E412",
+    "ARKI_HTTP_E413",
+    "ARKI_HTTP_E420",
+    "ARKI_HTTP_E421",
+    "ARKI_HTTP_E422",
+    "ARKI_HTTP_E500",
+    "ARKI_HTTP_E510",
+    "ARKI_HTTP_E511",
+    "http.idempotency_claim_unconfirmed",
+    "http.idempotency_hash_unavailable",
+    "http.idempotency_in_progress",
+    "http.idempotency_key_required",
+    "http.idempotency_key_reused",
+    "http.idempotency_ownership_lost",
+    "http.idempotency_release_unconfirmed",
+    "http.idempotency_replay_invalid",
+    "http.idempotency_request_too_large",
+    "http.idempotency_request_unreadable",
+    "http.idempotency_response_unavailable",
+    "http.idempotency_write_unconfirmed",
+    "http.network_failure",
+    "http.redirect_limit",
+    "http.request_cancelled",
+    "http.request_timeout",
+    "http.response_too_large",
+    "http.unsafe_url",
+    "http.webhook_body_too_large",
+    "http.webhook_body_unreadable",
+    "http.webhook_crypto_unavailable",
+    "http.webhook_malformed",
+    "http.webhook_signature_mismatch",
+    "http.webhook_stale"
+  ]
+}

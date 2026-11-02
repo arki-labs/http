@@ -1,7 +1,7 @@
 {
   "name": "@arki/http",
-  "version": "0.2.1",
-  "description": "Typed HTTP for ARKI — route contracts as data, zod-validated handlers, request-scope derivers, SSE streaming, OpenAPI generation, and the DOT http() plugin.",
+  "version": "0.4.1",
+  "description": "Typed HTTP for ARKI — route contracts as data, schema-validated handlers (any Standard Schema), request-scope derivers, SSE streaming, OpenAPI generation, and the DOT http() plugin.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -39,6 +39,21 @@
       "import": "./dist/projection.js",
       "default": "./dist/projection.js"
     },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js",
+      "default": "./dist/client.js"
+    },
+    "./idempotency": {
+      "types": "./dist/idempotency.d.ts",
+      "import": "./dist/idempotency.js",
+      "default": "./dist/idempotency.js"
+    },
+    "./webhooks": {
+      "types": "./dist/webhooks.d.ts",
+      "import": "./dist/webhooks.js",
+      "default": "./dist/webhooks.js"
+    },
     "./context": {
       "types": "./dist/context.d.ts",
       "import": "./dist/context.js",
@@ -60,20 +75,28 @@
     "!src/**/test/**",
     "!src/**/__tests__/**",
     "README.md",
+    "docs/**",
+    "!docs/examples/*.test.ts",
+    "!docs/examples/tsconfig.json",
+    "llms.txt",
     "LICENSE",
     "package.json"
   ],
   "dependencies": {
-    "@arki/log": "0.1.0",
-    "@arki/ts": "0.0.3",
+    "@arki/contracts": "0.4.1",
+    "@arki/failure": "0.3.0",
+    "@arki/log": "0.4.0",
+    "@arki/resilience": "0.3.2",
+    "@arki/schema": "0.3.0",
     "@hono/node-server": "^2.1.4",
+    "@opentelemetry/api": "^1.9.1",
     "hono": "^4.13.13",
     "ipaddr.js": "^2.5.0",
     "undici": "^8.11.2",
     "zod": "4.6.5"
   },
   "peerDependencies": {
-    "@arki/dot": "^0.6.1"
+    "@arki/dot": "^0.10.0"
   },
   "peerDependenciesMeta": {
     "@arki/dot": {

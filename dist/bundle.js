@@ -1,40 +1,22 @@
-/**
- * Route bundles — the dynamic half of an HTTP surface.
- *
- * A bundle binds contracts to handlers. It is assembled inside a plugin's
- * `boot` hook — where the plugin's `needs` are already injected — so handlers
- * and derivers close over typed singletons:
- *
- * ```ts
- * export const OrdersRoutes = token<RouteBundle>()('orders.routes');
- *
- * export const ordersPlugin = plugin({
- *   name: 'orders',
- *   needs: { db: service<Db>() },
- *   actions: [listOrders, createOrder],
- *   async boot({ db }) {
- *     return provide(
- *       OrdersRoutes,
- *       routes()
- *         .bind(listOrders, async ({ query }) => db.orders.list(query))
- *         .bind(createOrder, async ({ body }, ctx) => db.orders.create(body, ctx.requestId)),
- *     );
- *   },
- * });
- * ```
- *
- * The builder accumulates deriver-added context keys in its type — a
- * handler bound after `.derive('principal', …)` sees `ctx.principal`
- * typed. Same accumulation idiom as `defineApp().use()`.
- */
-import { BASE_CTX_KEYS } from './derive.js';
 import { HTTP_ERROR_CODES, HttpConfigError } from './error.js';
 import { HTTP_ACTION_META_SCHEMA } from './openapi.js';
-/** Declare the static half of an RPC mount. See {@link RpcMountContract}. */
+export const REPLY = Symbol.for('@arki/http/reply');
+/**
+ * Answer with one of the contract's `responses`: `reply(404, { reason })`.
+ * The status must be a key of `responses` and the body must fit its schema.
+ * Extra `headers` ride along on the response.
+ */
+export function reply(status, body, init = {}) {
+    return { [REPLY]: true, status, body, ...(init.headers === undefined ? {} : { headers: init.headers }) };
+}
+export function isReply(value) {
+    return typeof value === 'object' && value !== null && REPLY in value;
+}
 export function rpcMount(path, options) {
     assertMountPath(path, options.id);
     const transport = options.transport ?? 'orpc';
     return {
+        ...options,
         kind: 'rpc-mount',
         id: options.id,
         path,
@@ -62,45 +44,20 @@ function assertMountPath(path, id) {
         });
     }
 }
-function assertFreshDeriverKey(key, existing) {
-    const reserved = BASE_CTX_KEYS.includes(key);
-    const duplicate = existing.some(d => d.key === key);
-    if (!reserved && !duplicate)
-        return;
-    throw new HttpConfigError({
-        code: HTTP_ERROR_CODES.duplicateDeriverKey,
-        message: reserved
-            ? `[http] deriver key "${key}" shadows a base request-context key.`
-            : `[http] deriver key "${key}" is already derived in this bundle.`,
-        remediation: `Pick a different key — base keys (${BASE_CTX_KEYS.join(', ')}) and earlier deriver keys are reserved.`,
-    });
-}
 function makeBuilder(state) {
     const impl = {
-        derivers: state.derivers,
+        stages: state.stages,
         bindings: state.bindings,
         mounts: state.mounts,
         rpcs: state.rpcs,
-        derive(keyOrDeriver, fn) {
-            let deriver;
-            if (typeof keyOrDeriver === 'string') {
-                if (fn === undefined) {
-                    throw new HttpConfigError({
-                        code: HTTP_ERROR_CODES.duplicateDeriverKey,
-                        message: `[http] derive("${keyOrDeriver}") is missing its deriver function.`,
-                        remediation: 'Pass derive(key, fn) or derive(deriverObject).',
-                    });
-                }
-                deriver = { key: keyOrDeriver, derive: fn };
-            }
-            else {
-                deriver = keyOrDeriver;
-            }
-            assertFreshDeriverKey(deriver.key, state.derivers);
-            return makeBuilder({ ...state, derivers: [...state.derivers, deriver] });
+        use(stage) {
+            return makeBuilder({ ...state, stages: [...state.stages, stage] });
         },
-        bind(contract, handler) {
-            return makeBuilder({ ...state, bindings: [...state.bindings, { contract, handler }] });
+        bind(contract, handler, options = {}) {
+            return makeBuilder({
+                ...state,
+                bindings: [...state.bindings, { contract, handler, stages: state.stages, ...options }],
+            });
         },
         mount(path, handler, meta) {
             assertMountPath(path, meta.id);
@@ -115,6 +72,8 @@ function makeBuilder(state) {
                 rpcs: [
                     ...state.rpcs,
                     {
+                        contract,
+                        stages: state.stages,
                         id: contract.id,
                         path: contract.path,
                         transport: contract.transport,
@@ -125,26 +84,12 @@ function makeBuilder(state) {
             });
         },
     };
-    // Erasure seam: the implementation works on erased contracts/handlers/
-    // derivers; the public builder type re-attaches the generics. The typed
-    // methods' arguments are structurally assignable to the erased
-    // parameters, so the only unsafe step is this widening of the return
-    // type — same seam as the DOT app builder's makeBuilder.
+    // Public overloads retain inferred contracts, context and failure sets;
+    // this implementation stores erased callbacks without altering their values.
     return impl;
 }
 /** Start an empty bundle. See the module docs for the authoring pattern. */
 export function routes() {
-    return makeBuilder({ derivers: [], bindings: [], mounts: [], rpcs: [] });
-}
-/**
- * Declare a feature's HTTP surface as a boot-time slice
- * (`feature(..., { use: [endpoints(build)] })`). The builder runs
- * once at boot with the feature's needed services; the bundle lands
- * under `routes` in the feature's slice record — where the
- * `.serve(http(...))` driver collects it. Route contracts stay in the
- * feature's `actions` list.
- */
-export function endpoints(build) {
-    return { key: 'routes', actions: [], resolve: build };
+    return makeBuilder({ stages: [], bindings: [], mounts: [], rpcs: [] });
 }
 //# sourceMappingURL=bundle.js.map

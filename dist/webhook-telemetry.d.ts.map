@@ -1,0 +1,1 @@
+{"version":3,"file":"webhook-telemetry.d.ts","sourceRoot":"","sources":["../src/webhook-telemetry.ts"],"names":[],"mappings":"AAGA,OAAO,EAAa,gBAAgB,EAAE,MAAM,eAAe,CAAC;AAY5D,uGAAuG;AACvG,wBAAsB,cAAc,CAAC,KAAK,EACxC,IAAI,EAAE,MAAM,EACZ,GAAG,EAAE,MAAM,KAAK,GAAG,OAAO,CAAC,KAAK,CAAC,GAChC,OAAO,CAAC,KAAK,GAAG,UAAU,CAAC,OAAO,gBAAgB,CAAC,CAAC,CAiCtD"}

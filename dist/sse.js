@@ -1,19 +1,31 @@
+import { orThrow } from '@arki/failure';
 /**
  * Server-sent-events serialization for {@link SseContract} bindings.
  *
- * The bound handler is an async iterable; every yielded value is validated
- * against the contract's event schema and framed as `data: <json>\n\n`.
+ * The bound handler is an async iterable; every yielded value is encoded
+ * with the contract's event schema and framed as `data: <json>\n\n`.
  * Client disconnect terminates the iterator (its `finally` blocks run);
  * a yielded value that violates the schema — or a generator crash — emits
  * a terminal `event: error` frame with the coded envelope, then closes.
  */
+import { parseAsync } from '@arki/schema';
 import { describeInternalError, HTTP_ERROR_CODES } from './error.js';
+import { encoderOf } from './wire.js';
 const SSE_HEADERS = {
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-cache',
     // Disable proxy buffering (nginx and friends) — events must flush.
     'x-accel-buffering': 'no',
 };
+/**
+ * Let the process exit while the heartbeat waits. Node and Bun return a timer
+ * object with `unref`; browsers, Deno's web API and Hermes return a number,
+ * which never holds a process open, so there is nothing to do.
+ */
+function unrefTimer(timer) {
+    if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function')
+        timer.unref();
+}
 export function sseResponse(iterable, contract, signal) {
     const encoder = new TextEncoder();
     const iterator = iterable[Symbol.asyncIterator]();
@@ -41,7 +53,7 @@ export function sseResponse(iterable, contract, signal) {
                         controller.enqueue(encoder.encode(':keepalive\n\n'));
                     }
                 }, contract.heartbeatMs);
-                heartbeat.unref();
+                unrefTimer(heartbeat);
             }
             signal.addEventListener('abort', () => {
                 cleanup();
@@ -58,7 +70,7 @@ export function sseResponse(iterable, contract, signal) {
                     controller.close();
                     return;
                 }
-                const value = contract.event === undefined ? next.value : contract.event.parse(next.value);
+                const value = contract.event === undefined ? next.value : await orThrow(parseAsync(encoderOf(contract.event), next.value));
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`));
             }
             catch (error) {
