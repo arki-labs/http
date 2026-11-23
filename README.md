@@ -1,4 +1,4 @@
-Read-only mirror of `@arki/http` v0.4.1. Source and issues: arki-labs/arki. Docs: https://arki.dev/packages/http. Published 2026-11-02 with provenance https://www.npmjs.com/package/@arki/http/v/0.4.1#provenance.
+Read-only mirror of `@arki/http` v0.5.0. Source and issues: arki-labs/arki. Docs: https://arki.dev/packages/http. Published 2026-11-23 with provenance https://www.npmjs.com/package/@arki/http/v/0.5.0#provenance.
 
 # @arki/http
 
@@ -69,6 +69,16 @@ To serve it, pass the engine to `listen`. See [Without DOT](#without-dot).
 | `@arki/http/dot` | yes | yes | no | no | no |
 
 `listen` uses `Bun.serve` under Bun (with the engine's route table, so Bun matches those routes natively) and `@hono/node-server` under Node. The server entry loads `node:async_hooks`. `bun run test:runtimes` runs the client smoke test on every runtime, and `scripts/server-smoke.mjs` runs the engine on Node and Bun.
+
+<!-- runtimes:start -->
+| Runtime | Result | Version tested | Date (UTC) |
+| --- | --- | --- | --- |
+| node | pass | v22.13.1 | 2026-11-05 |
+| bun | pass | 1.4.2 | 2026-11-05 |
+| deno | pass | 2.9.8 | 2026-11-05 |
+| browser | pass | Chromium 156.0.8078.4 | 2026-11-05 |
+| hermes | pass | V1 250829098.0.17 | 2026-11-05 |
+<!-- runtimes:end -->
 
 ## The model
 
@@ -746,6 +756,24 @@ Stable API — match on codes, never parse messages.
 `E4xx`/`E5xx` codes surface on the wire in the error envelope (`E510` and
 `E511` answer 500). Unexpected
 error messages are redacted unless `NODE_ENV=development`.
+
+## Observability
+
+Spans (OpenTelemetry API only, tracer `@arki/http`; nothing is exported until the app configures an SDK):
+
+| Span | When | Attributes |
+| --- | --- | --- |
+| `http.request` | each request the engine serves (default and Hono engine) | `http.response.status_code`; `failure.code` on an error envelope or a throw. Error status on a 5xx response or a throw, except a thrown `HttpError` below 500 |
+| `http.idempotency` | each request a protected idempotency route handles | `http.response.status_code`; `failure.code` on a refusal; error status only for a fault (5xx). A 4xx refusal (a reused key 422, a cancelled request 499) leaves it unset |
+| `http.webhook.request` | each `verifyWebhook` step: body read plus verification | `failure.code` on failure; error status only for a fault (5xx) |
+| `http.webhook.verify` | each `scheme.verify(...)` | `failure.code` on failure; error status only for a fault |
+| `http.webhook.sign` | each `scheme.sign(...)` | `failure.code` on failure; error status only for a fault |
+
+Spans start under the active context. In a Dot app a usecase called by a handler is a child of `http.request`, and HTTP work a usecase does (signing a webhook) is a child of the usecase. No span carries a request id, URL, idempotency key, body or private cause.
+
+Metrics: none. The Dot entrypoint's in-flight count (`httpServer.inflight()`) is a plain number for draining, not an OpenTelemetry metric.
+
+Not instrumented: the typed client and `public-fetch` — they call `fetch`, which the runtime's fetch instrumentation (undici) already spans.
 
 ## Limits
 

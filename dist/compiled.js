@@ -101,9 +101,9 @@ function walk(node, path, from, values) {
         if (values.length === 0)
             return { run: node.route.run, params: NO_PARAMS };
         const params = {};
-        node.route.paramNames.forEach((name, index) => {
+        for (const [index, name] of node.route.paramNames.entries()) {
             params[name] = values[index] ?? '';
-        });
+        }
         return { run: node.route.run, params };
     }
     let end = path.indexOf('/', from);

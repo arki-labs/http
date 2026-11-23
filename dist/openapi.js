@@ -174,13 +174,13 @@ function isJsonValue(value) {
     if (isJsonPrimitive(value))
         return typeof value !== 'number' || Number.isFinite(value);
     if (Array.isArray(value))
-        return value.every(isJsonValue);
+        return value.every(item => isJsonValue(item));
     if (!is(value, plainObjectSchema))
         return false;
-    return Object.values(value).every(isJsonValue);
+    return Object.values(value).every(item => isJsonValue(item));
 }
 function isJsonObject(value) {
-    return is(value, plainObjectSchema) && Object.values(value).every(isJsonValue);
+    return is(value, plainObjectSchema) && Object.values(value).every(item => isJsonValue(item));
 }
 function jsonDeepEqual(left, right) {
     if (isJsonPrimitive(left) || isJsonPrimitive(right))

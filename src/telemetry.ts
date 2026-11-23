@@ -63,9 +63,12 @@ async function observeRecording(span: Span, run: () => Response | Promise<Respon
     observe(() => {
       span?.setAttribute('failure.code', error instanceof HttpError ? error.code : UnexpectedDefect.code);
     });
-    observe(() => {
-      span?.setStatus({ code: SpanStatusCode.ERROR });
-    });
+    // A thrown `HttpError` is a typed failure carried across a throw (`orThrowHttp`): like a returned failure,
+    // only a fault (status 500 or higher, as `isFault` judges a failure) is an error. Any other throw is a defect.
+    if (!(error instanceof HttpError) || error.status >= 500)
+      observe(() => {
+        span?.setStatus({ code: SpanStatusCode.ERROR });
+      });
     throw error;
   } finally {
     observe(() => {

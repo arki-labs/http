@@ -114,9 +114,9 @@ function walk(node: TrieNode, path: string, from: number, values: string[]): Hit
     if (node.route === undefined) return undefined;
     if (values.length === 0) return { run: node.route.run, params: NO_PARAMS };
     const params: Record<string, string> = {};
-    node.route.paramNames.forEach((name, index) => {
+    for (const [index, name] of node.route.paramNames.entries()) {
       params[name] = values[index] ?? '';
-    });
+    }
     return { run: node.route.run, params };
   }
   let end = path.indexOf('/', from);

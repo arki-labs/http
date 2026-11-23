@@ -16,9 +16,7 @@ export type OpenApiInfo = {
 export type JsonValue = string | number | boolean | null | JsonValue[] | {
     [key: string]: JsonValue;
 };
-export type JsonObject = {
-    [key: string]: JsonValue;
-};
+export type JsonObject = Record<string, JsonValue>;
 export declare const HTTP_ACTION_META_SCHEMA = "@arki/http/action-meta@1";
 /**
  * Render an OpenAPI 3.1 document from contracts. Paths and operations

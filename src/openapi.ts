@@ -25,7 +25,7 @@ export type OpenApiInfo = {
 };
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-export type JsonObject = { [key: string]: JsonValue };
+export type JsonObject = Record<string, JsonValue>;
 
 export const HTTP_ACTION_META_SCHEMA = '@arki/http/action-meta@1';
 
@@ -190,13 +190,13 @@ function isJsonPrimitive(value: unknown): value is string | number | boolean | n
 
 function isJsonValue(value: unknown): value is JsonValue {
   if (isJsonPrimitive(value)) return typeof value !== 'number' || Number.isFinite(value);
-  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (Array.isArray(value)) return value.every(item => isJsonValue(item));
   if (!is(value, plainObjectSchema)) return false;
-  return Object.values(value).every(isJsonValue);
+  return Object.values(value).every(item => isJsonValue(item));
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
-  return is(value, plainObjectSchema) && Object.values(value).every(isJsonValue);
+  return is(value, plainObjectSchema) && Object.values(value).every(item => isJsonValue(item));
 }
 
 function jsonDeepEqual(left: unknown, right: unknown): boolean {

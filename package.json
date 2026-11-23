@@ -1,6 +1,6 @@
 {
   "name": "@arki/http",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Typed HTTP for ARKI — route contracts as data, schema-validated handlers (any Standard Schema), request-scope derivers, SSE streaming, OpenAPI generation, and the DOT http() plugin.",
   "license": "MIT",
   "repository": {
@@ -83,11 +83,11 @@
     "package.json"
   ],
   "dependencies": {
-    "@arki/contracts": "0.4.1",
-    "@arki/failure": "0.3.0",
-    "@arki/log": "0.4.0",
-    "@arki/resilience": "0.3.2",
-    "@arki/schema": "0.3.0",
+    "@arki/contracts": "0.4.2",
+    "@arki/failure": "0.4.0",
+    "@arki/log": "0.4.1",
+    "@arki/resilience": "0.3.3",
+    "@arki/schema": "0.3.1",
     "@hono/node-server": "^2.1.4",
     "@opentelemetry/api": "^1.9.1",
     "hono": "^4.13.13",
@@ -96,7 +96,7 @@
     "zod": "4.6.5"
   },
   "peerDependencies": {
-    "@arki/dot": "^0.10.0"
+    "@arki/dot": "^0.11.0"
   },
   "peerDependenciesMeta": {
     "@arki/dot": {
@@ -105,5 +105,14 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "arki": {
+    "runtimes": [
+      "node",
+      "bun",
+      "deno",
+      "browser",
+      "hermes"
+    ]
   }
 }

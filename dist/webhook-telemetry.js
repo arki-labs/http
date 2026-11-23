@@ -1,5 +1,5 @@
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { isFailure, UnexpectedDefect } from '@arki/failure';
+import { isFailure, isFault, UnexpectedDefect } from '@arki/failure';
 function report(action) {
     try {
         void Promise.resolve(action()).catch(() => {
@@ -26,9 +26,11 @@ export async function observeWebhook(name, run) {
             report(() => {
                 return span?.setAttribute('failure.code', value.code);
             });
-            report(() => {
-                return span?.setStatus({ code: SpanStatusCode.ERROR });
-            });
+            // An expected outcome (4xx) leaves the status unset; only a fault (5xx) is an error.
+            if (isFault(value))
+                report(() => {
+                    return span?.setStatus({ code: SpanStatusCode.ERROR });
+                });
         }
         return value;
     }

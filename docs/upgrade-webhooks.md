@@ -60,7 +60,7 @@ telemetry. Static invalid scheme definitions still throw `HttpConfigError`
 
 The `@arki/http` tracer emits `http.webhook.sign`, `http.webhook.verify` and
 `http.webhook.request`. Configure the SDK/context manager in the application.
-Only `failure.code` and error status are recorded. Secrets, signatures, bodies,
+Only `failure.code` and, for a fault (`isFault`: status 500 or higher), the error status are recorded; a 4xx refusal such as a bad signature leaves the status unset. Secrets, signatures, bodies,
 IDs and private exception messages are excluded. Faulty instrumentation cannot
 repeat work or replace its outcome.
 
